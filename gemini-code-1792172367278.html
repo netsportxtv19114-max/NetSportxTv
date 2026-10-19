@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Criz HD TV - Live Cricket Streaming</title>
+    <style>
+        /* ==============================================================
+           DEVELOPER CSS & STYLING SECTION
+           (Dark Theme for Premium Streaming Look)
+        ============================================================== */
+        :root {
+            --primary-color: #e50914; /* लाल रंग (Live Streaming Vibe) */
+            --bg-color: #0f0f0f;      /* डार्क बैकग्राउंड */
+            --card-bg: #1f1f1f;
+            --text-light: #ffffff;
+            --text-muted: #aaaaaa;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-light);
+            text-align: center;
+        }
+
+        /* Screen Management */
+        .screen {
+            display: none; 
+            min-height: 100vh;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .screen.active {
+            display: flex;
+            animation: fadeIn 0.4s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* CSS Logo Design */
+        .logo {
+            font-size: 42px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 30px;
+            text-shadow: 0px 4px 10px rgba(0,0,0,0.5);
+        }
+        
+        .logo span {
+            color: var(--primary-color);
+        }
+
+        .logo.small {
+            font-size: 26px;
+            margin-bottom: 20px;
+        }
+
+        /* Buttons Styling */
+        .btn {
+            background-color: var(--primary-color);
+            color: #fff;
+            border: none;
+            padding: 14px 35px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);
+            transition: all 0.3s ease;
+            margin-top: 15px;
+        }
+
+        .btn:hover {
+            background-color: #ff0f1a;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(229, 9, 20, 0.6);
+        }
+
+        /* Dropdown Styling */
+        select {
+            background-color: var(--card-bg);
+            color: var(--text-light);
+            padding: 12px 20px;
+            font-size: 16px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            margin-bottom: 25px;
+            width: 100%;
+            max-width: 300px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        /* Ad Banner Placeholder Styling */
+        .ad-space {
+            width: 100%;
+            max-width: 728px;
+            min-height: 90px;
+            background-color: #1a1a1a;
+            border: 1px dashed #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 12px;
+            margin: 10px auto;
+        }
+
+        /* Video Player Styling */
+        .video-wrapper {
+            width: 100%;
+            max-width: 854px;
+            aspect-ratio: 16/9;
+            background-color: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            border: 1px solid #333;
+            margin-bottom: 20px;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ==========================================
+         SCREEN 1: HOME / SPLASH SCREEN
+    ========================================== -->
+    <div id="screen1" class="screen active">
+        
+        <!-- ⬇️ SCREEN 1: TOP ADSTERRA BANNER CODE YAHAN PASTE KAREN ⬇️ -->
+         <script>
+  atOptions = {
+    'key' : 'd69a37b7de5baa9051f2a18493540f3f',
+    'format' : 'iframe',
+    'height' : 50,
+    'width' : 320,
+    'params' : {}
+  };
+</script>
+<script src="https://czernik.org/22/d69a37b7de5baa9051f2a18493540f3f"></script>
+        <div class="ad-space">
+            Adsterra Top Banner (728x90)
+        </div>
+
+        <div class="content">
+            <!-- Criz HD TV Logo -->
+            <div class="logo">Criz <span>HD</span> TV</div>
+            <button class="btn" onclick="showScreen('screen2')">Watch Live Match</button>
+        </div>
+
+        <!-- ⬇️ SCREEN 1: BOTTOM ADSTERRA BANNER CODE YAHAN PASTE KAREN ⬇️ -->
+         <script>
+  atOptions = {
+    'key' : '8613bc9c233077765ffea7fcfeea4fe3',
+    'format' : 'iframe',
+    'height' : 90,
+    'width' : 728,
+    'params' : {}
+  };
+</script>
+<script src="https://czernik.org/22/8613bc9c233077765ffea7fcfeea4fe3"></script>
+        <div class="ad-space">
+            Adsterra Bottom Banner
+        </div>
+    </div>
+
+    <!-- ==========================================
+         SCREEN 2: LANGUAGE SELECTION
+    ========================================== -->
+    <div id="screen2" class="screen">
+        
+        <!-- ⬇️ SCREEN 2: TOP ADSTERRA BANNER CODE YAHAN PASTE KAREN ⬇️ -->
+        <div class="ad-space">
+            Adsterra Top Banner
+        </div>
+
+        <div class="content">
+            <!-- Small Logo for inside pages -->
+            <div class="logo small">Criz <span>HD</span> TV</div>
+            
+            <select id="language">
+                <option value="hindi">Hindi</option>
+                <option value="english">English</option>
+                <option value="local">Local Language</option>
+            </select>
+            
+            <button class="btn" onclick="showScreen('screen3')">Continue to Stream</button>
+        </div>
+
+        <!-- ⬇️ SCREEN 2: BOTTOM ADSTERRA BANNER CODE YAHAN PASTE KAREN ⬇️ -->
+        <div class="ad-space">
+            Adsterra Bottom Banner
+        </div>
+    </div>
+
+    <!-- ==========================================
+         SCREEN 3: LIVE STREAMING PLAYER
+    ========================================== -->
+    <div id="screen3" class="screen">
+        <div class="content" style="justify-content: flex-start; padding-top: 30px;">
+            
+            <div class="logo small" style="margin-bottom: 10px;">Criz <span>HD</span> TV <span style="font-size: 14px; color:red;">🔴 LIVE</span></div>
+            
+            <div class="video-wrapper">
+                <!-- ⬇️ APNE LIVE MATCH KA IFRAME (YOUTUBE/TWITCH) YAHAN PASTE KAREN ⬇️ -->
+                <iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ" title="Live Cricket Stream" allowfullscreen></iframe>
+            </div>
+
+            <!-- ⬇️ SCREEN 3: STREAMING KE NICHE WALA ADSTERRA BANNER YAHAN PASTE KAREN ⬇️ -->
+            <div class="ad-space">
+                Adsterra Banner (Below Player)
+            </div>
+            
+            <button class="btn" onclick="showScreen('screen1')" style="background-color: #333; margin-top: 30px;">Back to Home</button>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         DEVELOPER SCRIPT (Screen Navigation)
+    ========================================== -->
+    <script>
+        // Yah function alag-alag screen ko hide/show karne ke liye hai
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(function(screen) {
+                screen.classList.remove('active');
+            });
+            document.getElementById(screenId).classList.add('active');
+        }
+    </script>
+</body>
+</html>
