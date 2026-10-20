@@ -1,258 +1,341 @@
 <!DOCTYPE html>
 <html lang="hi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Criz HD TV - Live Cricket Streaming</title>
-    <style>
-        /* ==============================================================
-           DEVELOPER CSS & STYLING SECTION
-           (Dark Theme for Premium Streaming Look)
-        ============================================================== */
-        :root {
-            --primary-color: #e50914; /* लाल रंग (Live Streaming Vibe) */
-            --bg-color: #0f0f0f;      /* डार्क बैकग्राउंड */
-            --card-bg: #1f1f1f;
-            --text-light: #ffffff;
-            --text-muted: #aaaaaa;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NetSportX TV - Live Sports</title>
+  
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    
+    body {
+      background: radial-gradient(circle at 50% 20%, #102a1d 0%, #06130b 100%);
+      color: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      overflow-x: hidden;
+    }
 
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-light);
-            text-align: center;
-        }
+    /* Ad Banner Slots (Clean container for developer scripts) */
+    .ad-container {
+      width: 100%;
+      max-width: 728px;
+      min-height: 90px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 8px 0;
+      overflow: hidden;
+    }
 
-        /* Screen Management */
-        .screen {
-            display: none; 
-            min-height: 100vh;
-            flex-direction: column;
-            justify-content: space-between;
-            align-items: center;
-        }
+    .main-wrapper {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex-grow: 1;
+      justify-content: center;
+    }
 
-        .screen.active {
-            display: flex;
-            animation: fadeIn 0.4s ease-in;
-        }
+    /* Branding Header */
+    .brand-title {
+      font-size: 2.2rem;
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      text-align: center;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .brand-title .brand-net { color: #ffffff; }
+    .brand-title .brand-accent { color: #00ff73; text-shadow: 0 0 14px rgba(0, 255, 115, 0.4); }
+    .brand-title .brand-tv { background: #00e664; color: #06130b; padding: 2px 8px; border-radius: 6px; font-size: 1.1rem; vertical-align: middle; }
 
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
+    /* Live Badge */
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 68, 68, 0.15);
+      border: 1px solid rgba(255, 68, 68, 0.4);
+      color: #ff4d4d;
+      font-size: 0.8rem;
+      font-weight: 800;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      background: #ff3b3b;
+      border-radius: 50%;
+      animation: pulse 1.2s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+      100% { opacity: 1; transform: scale(1); }
+    }
 
-        .content {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            width: 100%;
-            box-sizing: border-box;
-        }
+    .match-label {
+      color: #8be0b2;
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 24px;
+      text-align: center;
+    }
 
-        /* CSS Logo Design */
-        .logo {
-            font-size: 42px;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 30px;
-            text-shadow: 0px 4px 10px rgba(0,0,0,0.5);
-        }
-        
-        .logo span {
-            color: var(--primary-color);
-        }
+    /* Primary Action Buttons */
+    .action-btn {
+      width: 100%;
+      max-width: 320px;
+      padding: 16px 20px;
+      background: linear-gradient(135deg, #00ff73 0%, #00b34d 100%);
+      color: #04180d;
+      font-size: 1.15rem;
+      font-weight: 800;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 8px 24px rgba(0, 230, 100, 0.35);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      margin: 10px 0;
+    }
+    .action-btn:active {
+      transform: scale(0.97);
+      box-shadow: 0 4px 12px rgba(0, 230, 100, 0.2);
+    }
 
-        .logo.small {
-            font-size: 26px;
-            margin-bottom: 20px;
-        }
+    /* Back Buttons */
+    .back-btn {
+      width: 100%;
+      max-width: 320px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #e0e0e0;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border-radius: 12px;
+      cursor: pointer;
+      margin-top: 12px;
+      transition: 0.2s;
+    }
+    .back-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
 
-        /* Buttons Styling */
-        .btn {
-            background-color: var(--primary-color);
-            color: #fff;
-            border: none;
-            padding: 14px 35px;
-            font-size: 18px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            text-transform: uppercase;
-            box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4);
-            transition: all 0.3s ease;
-            margin-top: 15px;
-        }
+    /* Language Selection */
+    .lang-dropdown {
+      width: 100%;
+      max-width: 320px;
+      padding: 14px 16px;
+      background: #092113;
+      border: 1px solid #1f5737;
+      border-radius: 12px;
+      color: #ffffff;
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      outline: none;
+    }
+    .lang-dropdown option { background: #081a10; color: #fff; }
 
-        .btn:hover {
-            background-color: #ff0f1a;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(229, 9, 20, 0.6);
-        }
+    /* Screen Views */
+    .view-section {
+      width: 100%;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+    }
+    .view-section.active { display: flex; }
 
-        /* Dropdown Styling */
-        select {
-            background-color: var(--card-bg);
-            color: var(--text-light);
-            padding: 12px 20px;
-            font-size: 16px;
-            border: 1px solid #333;
-            border-radius: 6px;
-            margin-bottom: 25px;
-            width: 100%;
-            max-width: 300px;
-            outline: none;
-            cursor: pointer;
-        }
+    /* Video Player Container */
+    .player-wrapper {
+      width: 100%;
+      max-width: 720px;
+      background: #000;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid #1f5135;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+      position: relative;
+      aspect-ratio: 16 / 9;
+    }
+    .player-wrapper iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
 
-        /* Ad Banner Placeholder Styling */
-        .ad-space {
-            width: 100%;
-            max-width: 728px;
-            min-height: 90px;
-            background-color: #1a1a1a;
-            border: 1px dashed #444;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-muted);
-            font-size: 12px;
-            margin: 10px auto;
-        }
+    /* Sticky Bottom Banner */
+    .sticky-bottom-banner {
+      width: 100%;
+      position: sticky;
+      bottom: 0;
+      z-index: 99;
+      background: rgba(6, 19, 11, 0.9);
+      backdrop-filter: blur(8px);
+      display: flex;
+      justify-content: center;
+      padding: 6px 0;
+    }
+  </style>
 
-        /* Video Player Styling */
-        .video-wrapper {
-            width: 100%;
-            max-width: 854px;
-            aspect-ratio: 16/9;
-            background-color: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
-            border: 1px solid #333;
-            margin-bottom: 20px;
-        }
-
-        iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-    </style>
+  <!-- Firebase Compat Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
-    <!-- ==========================================
-         SCREEN 1: HOME / SPLASH SCREEN
-    ========================================== -->
-    <div id="screen1" class="screen active">
-        
-        <!-- ⬇️ SCREEN 1: TOP ADSTERRA BANNER CODE YAHAN PASTE KAREN ⬇️ -->
-         <script>
-  atOptions = {
-    'key' : 'd69a37b7de5baa9051f2a18493540f3f',
-    'format' : 'iframe',
-    'height' : 50,
-    'width' : 320,
-    'params' : {}
-  };
-</script>
-<script src="https://czernik.org/22/d69a37b7de5baa9051f2a18493540f3f"></script>
-        <div class="ad-space">
-            Adsterra Top Banner (728x90)
-        </div>
+  <!-- TOP AD BANNER (Adsterra Code yahan paste karein) -->
+  <div class="ad-container" id="topAdSlot">
+    <!-- [DEVELOPER: PASTE YOUR ADSTERRA TOP BANNER SCRIPT HERE] -->
+  </div>
 
-        <div class="content">
-            <!-- Criz HD TV Logo -->
-            <div class="logo">Criz <span>HD</span> TV</div>
-            <button class="btn" onclick="showScreen('screen2')">Watch Live Match</button>
-        </div>
+  <main class="main-wrapper">
 
-        <!-- ⬇️ SCREEN 1: BOTTOM ADSTERRA BANNER CODE YAHAN PASTE KAREN ⬇️ -->
-         <script>
-  atOptions = {
-    'key' : '8613bc9c233077765ffea7fcfeea4fe3',
-    'format' : 'iframe',
-    'height' : 90,
-    'width' : 728,
-    'params' : {}
-  };
-</script>
-<script src="https://czernik.org/22/8613bc9c233077765ffea7fcfeea4fe3"></script>
-        <div class="ad-space">
-            Adsterra Bottom Banner
+    <!-- SCREEN 1: HOME VIEW -->
+    <section id="homeView" class="view-section active">
+      <div class="brand-title">
+        <span class="brand-net">NetSport</span><span class="brand-accent">X</span>
+        <span class="brand-tv">TV</span>
+      </div>
+
+      <div class="live-indicator">
+        <span class="live-dot"></span>
+        <span>Match Live Now</span>
+      </div>
+
+      <div class="match-label" id="homeMatchTitle">Loading Live Match...</div>
+
+      <button class="action-btn" onclick="goToLanguageView()">WATCH LIVE MATCH</button>
+    </section>
+
+    <!-- SCREEN 2: LANGUAGE SELECTOR -->
+    <section id="languageView" class="view-section">
+      <div class="brand-title">
+        <span class="brand-net">NetSport</span><span class="brand-accent">X</span>
+        <span class="brand-tv">TV</span>
+      </div>
+
+      <p style="color: #a3cfb4; margin-bottom: 12px; font-size: 0.95rem;">Select Commentary Language:</p>
+
+      <select id="selectedLanguage" class="lang-dropdown">
+        <option value="Hindi">Hindi Commentary</option>
+        <option value="English">English Commentary</option>
+      </select>
+
+      <button class="action-btn" onclick="startStreaming()">CONTINUE TO STREAM</button>
+      <button class="back-btn" onclick="goToHomeView()">← Back to Home</button>
+    </section>
+
+    <!-- SCREEN 3: STREAM PLAYER -->
+    <section id="streamView" class="view-section">
+      <div style="display:flex; justify-content: space-between; width: 100%; max-width: 720px; align-items:center; margin-bottom: 10px;">
+        <div style="font-weight: 700; color: #00ff73; font-size: 1rem;" id="playerMatchTitle">Live Stream</div>
+        <div class="live-indicator" style="margin-bottom: 0;">
+          <span class="live-dot"></span> LIVE
         </div>
+      </div>
+
+      <div class="player-wrapper">
+        <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+      </div>
+
+      <!-- MID-PAGE AD BANNER (Below Player) -->
+      <div class="ad-container" style="min-height: 60px;">
+        <!-- [DEVELOPER: PASTE ADSTERRA MIDDLE/BELOW PLAYER CODE HERE] -->
+      </div>
+
+      <button class="back-btn" style="max-width: 260px;" onclick="goToLanguageView()">← Change Language</button>
+      <button class="back-btn" style="max-width: 260px; margin-top: 6px;" onclick="goToHomeView()">⌂ Home</button>
+    </section>
+
+  </main>
+
+  <!-- STICKY BOTTOM AD BANNER -->
+  <footer class="sticky-bottom-banner">
+    <div class="ad-container" id="bottomAdSlot" style="margin: 0; min-height: 60px;">
+      <!-- [DEVELOPER: PASTE YOUR ADSTERRA STICKY/BOTTOM BANNER SCRIPT HERE] -->
     </div>
+  </footer>
 
-    <!-- ==========================================
-         SCREEN 2: LANGUAGE SELECTION
-    ========================================== -->
-    <div id="screen2" class="screen">
-        
-        <!-- ⬇️ SCREEN 2: TOP ADSTERRA BANNER CODE YAHAN PASTE KAREN ⬇️ -->
-        <div class="ad-space">
-            Adsterra Top Banner
-        </div>
+  <script>
+    // Aapka Exact Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyBBjtnl1lVbPf6QwpnB85hZ6ID2woz8RP4",
+      authDomain: "netsportxtv.firebaseapp.com",
+      databaseURL: "https://netsportxtv-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "netsportxtv",
+      storageBucket: "netsportxtv.firebasestorage.app",
+      messagingSenderId: "20505178770",
+      appId: "1:20505178770:web:a33108e152f4ce0499ec4b",
+      measurementId: "G-FH8RTB7WN9"
+    };
 
-        <div class="content">
-            <!-- Small Logo for inside pages -->
-            <div class="logo small">Criz <span>HD</span> TV</div>
-            
-            <select id="language">
-                <option value="hindi">Hindi</option>
-                <option value="english">English</option>
-                <option value="local">Local Language</option>
-            </select>
-            
-            <button class="btn" onclick="showScreen('screen3')">Continue to Stream</button>
-        </div>
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-        <!-- ⬇️ SCREEN 2: BOTTOM ADSTERRA BANNER CODE YAHAN PASTE KAREN ⬇️ -->
-        <div class="ad-space">
-            Adsterra Bottom Banner
-        </div>
-    </div>
+    let streamLinks = {
+      title: "Live Match",
+      hindi: "",
+      english: ""
+    };
 
-    <!-- ==========================================
-         SCREEN 3: LIVE STREAMING PLAYER
-    ========================================== -->
-    <div id="screen3" class="screen">
-        <div class="content" style="justify-content: flex-start; padding-top: 30px;">
-            
-            <div class="logo small" style="margin-bottom: 10px;">Criz <span>HD</span> TV <span style="font-size: 14px; color:red;">🔴 LIVE</span></div>
-            
-            <div class="video-wrapper">
-                <!-- ⬇️ APNE LIVE MATCH KA IFRAME (YOUTUBE/TWITCH) YAHAN PASTE KAREN ⬇️ -->
-                <iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ" title="Live Cricket Stream" allowfullscreen></iframe>
-            </div>
+    // Firebase Realtime Listener
+    db.ref("liveStream").on("value", (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        streamLinks.title = data.title || "Live Sports";
+        streamLinks.hindi = data.hindi || "";
+        streamLinks.english = data.english || "";
 
-            <!-- ⬇️ SCREEN 3: STREAMING KE NICHE WALA ADSTERRA BANNER YAHAN PASTE KAREN ⬇️ -->
-            <div class="ad-space">
-                Adsterra Banner (Below Player)
-            </div>
-            
-            <button class="btn" onclick="showScreen('screen1')" style="background-color: #333; margin-top: 30px;">Back to Home</button>
-        </div>
-    </div>
+        document.getElementById("homeMatchTitle").innerText = streamLinks.title;
+        document.getElementById("playerMatchTitle").innerText = streamLinks.title;
+      }
+    });
 
-    <!-- ==========================================
-         DEVELOPER SCRIPT (Screen Navigation)
-    ========================================== -->
-    <script>
-        // Yah function alag-alag screen ko hide/show karne ke liye hai
-        function showScreen(screenId) {
-            document.querySelectorAll('.screen').forEach(function(screen) {
-                screen.classList.remove('active');
-            });
-            document.getElementById(screenId).classList.add('active');
-        }
-    </script>
+    // Navigation Controllers
+    function switchScreen(screenId) {
+      document.querySelectorAll(".view-section").forEach(sec => sec.classList.remove("active"));
+      document.getElementById(screenId).classList.add("active");
+    }
+
+    function goToHomeView() {
+      // Stream stop kar dein jab user home par aaye
+      document.getElementById("videoIframe").src = "";
+      switchScreen("homeView");
+    }
+
+    function goToLanguageView() {
+      document.getElementById("videoIframe").src = "";
+      switchScreen("languageView");
+    }
+
+    function startStreaming() {
+      const selected = document.getElementById("selectedLanguage").value;
+      const targetUrl = (selected === "Hindi") ? streamLinks.hindi : streamLinks.english;
+
+      if (!targetUrl) {
+        alert("Selected stream link abhi available nahi hai. Kripya doosri language chunein.");
+        return;
+      }
+
+      document.getElementById("videoIframe").src = targetUrl;
+      switchScreen("streamView");
+    }
+  </script>
 </body>
 </html>
