@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NetSportX TV - Admin Panel</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body {
+      background: radial-gradient(circle at top, #112d1e 0%, #06130b 100%);
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .panel-card {
+      background: rgba(12, 34, 22, 0.95);
+      border: 1px solid #1f5135;
+      border-radius: 16px;
+      padding: 24px;
+      width: 100%;
+      max-width: 460px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(0, 230, 100, 0.15);
+      color: #00ff73;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    h2 { font-size: 1.4rem; color: #ffffff; margin-bottom: 6px; }
+    p.desc { font-size: 0.85rem; color: #8bbfa1; margin-bottom: 20px; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; color: #a3cfb4; margin-bottom: 6px; }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #23583a;
+      background: #081a10;
+      color: #fff;
+      margin-bottom: 16px;
+      font-size: 0.95rem;
+      transition: border 0.2s;
+    }
+    input:focus { outline: none; border-color: #00ff73; box-shadow: 0 0 8px rgba(0,255,115,0.25); }
+    .btn-update {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #00ff73 0%, #00b84f 100%);
+      border: none;
+      border-radius: 10px;
+      color: #04180d;
+      font-weight: 800;
+      font-size: 1rem;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: 0 6px 16px rgba(0, 230, 100, 0.3);
+    }
+    .btn-update:active { transform: scale(0.98); }
+    #msg {
+      margin-top: 15px;
+      text-align: center;
+      font-size: 0.9rem;
+      font-weight: 600;
+      min-height: 22px;
+    }
+  </style>
+
+  <!-- Firebase Compat Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+  <div class="panel-card">
+    <span class="badge">Live Stream Controller</span>
+    <h2>NetSportX TV Admin</h2>
+    <p class="desc">Link update karte hi live website par match turant badal jayega.</p>
+
+    <label for="adminPin">Secret PIN (Default: 1234)</label>
+    <input type="password" id="adminPin" placeholder="Enter Secret PIN">
+
+    <label for="matchTitle">Match Title</label>
+    <input type="text" id="matchTitle" placeholder="e.g. IND vs PAK T20 World Cup">
+
+    <label for="hindiLink">Hindi Stream Embed URL</label>
+    <input type="text" id="hindiLink" placeholder="https://www.youtube.com/embed/... ya Direct Embed Link">
+
+    <label for="englishLink">English Stream Embed URL</label>
+    <input type="text" id="englishLink" placeholder="https://www.youtube.com/embed/... ya Direct Embed Link">
+
+    <button class="btn-update" onclick="saveStreamData()">Update Live Stream</button>
+    <div id="msg"></div>
+  </div>
+
+  <script>
+    // Aapka Exact Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBBjtnl1lVbPf6QwpnB85hZ6ID2woz8RP4",
+      authDomain: "netsportxtv.firebaseapp.com",
+      databaseURL: "https://netsportxtv-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "netsportxtv",
+      storageBucket: "netsportxtv.firebasestorage.app",
+      messagingSenderId: "20505178770",
+      appId: "1:20505178770:web:a33108e152f4ce0499ec4b",
+      measurementId: "G-FH8RTB7WN9"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Apna PIN yahan se badal sakte hain
+    const CORRECT_PIN = "1234";
+
+    // Pehle se saved data fetch karna
+    db.ref("liveStream").once("value", (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        document.getElementById("matchTitle").value = data.title || "";
+        document.getElementById("hindiLink").value = data.hindi || "";
+        document.getElementById("englishLink").value = data.english || "";
+      }
+    });
+
+    function saveStreamData() {
+      const pin = document.getElementById("adminPin").value.trim();
+      const msg = document.getElementById("msg");
+
+      if (pin !== CORRECT_PIN) {
+        msg.style.color = "#ff4d4d";
+        msg.innerText = "❌ Galat PIN! Please sahi PIN dalein.";
+        return;
+      }
+
+      const title = document.getElementById("matchTitle").value.trim();
+      const hindi = document.getElementById("hindiLink").value.trim();
+      const english = document.getElementById("englishLink").value.trim();
+
+      msg.style.color = "#ffb700";
+      msg.innerText = "Saving to Firebase...";
+
+      db.ref("liveStream").set({
+        title: title || "Live Sports Match",
+        hindi: hindi,
+        english: english,
+        updatedAt: Date.now()
+      }).then(() => {
+        msg.style.color = "#00ff73";
+        msg.innerText = "✅ Live Match Link Successfully Update Ho Gaya!";
+      }).catch((err) => {
+        msg.style.color = "#ff4d4d";
+        msg.innerText = "Error: " + err.message;
+      });
+    }
+  </script>
+</body>
+</html>
