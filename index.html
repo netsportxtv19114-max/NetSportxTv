@@ -20,7 +20,7 @@
       overflow-x: hidden;
     }
 
-    /* Ad Banner Slots (Clean container for developer scripts) */
+    /* Ad Banner Slots */
     .ad-container {
       width: 100%;
       max-width: 728px;
@@ -96,7 +96,7 @@
       text-align: center;
     }
 
-    /* Primary Action Buttons */
+    /* Buttons */
     .action-btn {
       width: 100%;
       max-width: 320px;
@@ -119,7 +119,6 @@
       box-shadow: 0 4px 12px rgba(0, 230, 100, 0.2);
     }
 
-    /* Back Buttons */
     .back-btn {
       width: 100%;
       max-width: 320px;
@@ -136,7 +135,7 @@
     }
     .back-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
 
-    /* Language Selection */
+    /* Dropdown */
     .lang-dropdown {
       width: 100%;
       max-width: 320px;
@@ -152,7 +151,7 @@
     }
     .lang-dropdown option { background: #081a10; color: #fff; }
 
-    /* Screen Views */
+    /* View Sections */
     .view-section {
       width: 100%;
       display: none;
@@ -161,7 +160,7 @@
     }
     .view-section.active { display: flex; }
 
-    /* Video Player Container */
+    /* Dual Player Container */
     .player-wrapper {
       width: 100%;
       max-width: 720px;
@@ -172,14 +171,19 @@
       box-shadow: 0 10px 30px rgba(0,0,0,0.8);
       position: relative;
       aspect-ratio: 16 / 9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .player-wrapper iframe {
+    .player-wrapper iframe,
+    .player-wrapper video {
       width: 100%;
       height: 100%;
       border: none;
+      object-fit: contain;
     }
 
-    /* Sticky Bottom Banner */
+    /* Sticky Footer */
     .sticky-bottom-banner {
       width: 100%;
       position: sticky;
@@ -193,13 +197,16 @@
     }
   </style>
 
-  <!-- Firebase Compat Scripts -->
+  <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <!-- HLS.js Library for .m3u8 streaming -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
 
-  <!-- TOP AD BANNER (Adsterra Code yahan paste karein) -->
+  <!-- TOP AD BANNER -->
   <div class="ad-container" id="topAdSlot">
     <!-- [DEVELOPER: PASTE YOUR ADSTERRA TOP BANNER SCRIPT HERE] -->
   </div>
@@ -218,7 +225,7 @@
         <span>Match Live Now</span>
       </div>
 
-      <div class="match-label" id="homeMatchTitle">Loading Live Match...</div>
+      <div class="match-label" id="homeMatchTitle">Connecting Live Match...</div>
 
       <button class="action-btn" onclick="goToLanguageView()">WATCH LIVE MATCH</button>
     </section>
@@ -251,12 +258,16 @@
       </div>
 
       <div class="player-wrapper">
-        <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+        <!-- iFrame player (YouTube/Embeds) -->
+        <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen" allowfullscreen style="display:none;"></iframe>
+        
+        <!-- Native/HLS player (.m3u8) -->
+        <video id="hlsPlayer" controls autoplay playsinline style="display:none;"></video>
       </div>
 
-      <!-- MID-PAGE AD BANNER (Below Player) -->
+      <!-- MID-PAGE AD BANNER -->
       <div class="ad-container" style="min-height: 60px;">
-        <!-- [DEVELOPER: PASTE ADSTERRA MIDDLE/BELOW PLAYER CODE HERE] -->
+        <!-- [DEVELOPER: PASTE ADSTERRA MIDDLE BANNER HERE] -->
       </div>
 
       <button class="back-btn" style="max-width: 260px;" onclick="goToLanguageView()">← Change Language</button>
@@ -268,12 +279,12 @@
   <!-- STICKY BOTTOM AD BANNER -->
   <footer class="sticky-bottom-banner">
     <div class="ad-container" id="bottomAdSlot" style="margin: 0; min-height: 60px;">
-      <!-- [DEVELOPER: PASTE YOUR ADSTERRA STICKY/BOTTOM BANNER SCRIPT HERE] -->
+      <!-- [DEVELOPER: PASTE YOUR ADSTERRA BOTTOM BANNER SCRIPT HERE] -->
     </div>
   </footer>
 
   <script>
-    // Aapka Exact Firebase Configuration
+    // Firebase Configuration
     const firebaseConfig = {
       apiKey: "AIzaSyBBjtnl1lVbPf6QwpnB85hZ6ID2woz8RP4",
       authDomain: "netsportxtv.firebaseapp.com",
@@ -294,7 +305,9 @@
       english: ""
     };
 
-    // Firebase Realtime Listener
+    let hlsInstance = null;
+
+    // Realtime Listener
     db.ref("liveStream").on("value", (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -307,20 +320,35 @@
       }
     });
 
-    // Navigation Controllers
+    // View Navigation
     function switchScreen(screenId) {
       document.querySelectorAll(".view-section").forEach(sec => sec.classList.remove("active"));
       document.getElementById(screenId).classList.add("active");
     }
 
+    function stopAllMedia() {
+      const iframe = document.getElementById("videoIframe");
+      const video = document.getElementById("hlsPlayer");
+
+      if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
+      }
+      iframe.src = "";
+      iframe.style.display = "none";
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+      video.style.display = "none";
+    }
+
     function goToHomeView() {
-      // Stream stop kar dein jab user home par aaye
-      document.getElementById("videoIframe").src = "";
+      stopAllMedia();
       switchScreen("homeView");
     }
 
     function goToLanguageView() {
-      document.getElementById("videoIframe").src = "";
+      stopAllMedia();
       switchScreen("languageView");
     }
 
@@ -333,7 +361,45 @@
         return;
       }
 
-      document.getElementById("videoIframe").src = targetUrl;
+      stopAllMedia();
+
+      const iframe = document.getElementById("videoIframe");
+      const video = document.getElementById("hlsPlayer");
+
+      // Auto-detect stream type: .m3u8 vs iFrame Embed
+      if (targetUrl.includes(".m3u8")) {
+        video.style.display = "block";
+
+        if (Hls.isSupported()) {
+          hlsInstance = new Hls();
+          hlsInstance.loadSource(targetUrl);
+          hlsInstance.attachMedia(video);
+          hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
+            video.play().catch(e => console.log("Autoplay blocked:", e));
+          });
+          hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+            if (data.fatal) {
+              console.error("HLS Stream Error:", data);
+              alert("Stream load nahi ho saki. Token expire ho sakta hai ya CORS block hai.");
+            }
+          });
+        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          // Native Safari / iOS support
+          video.src = targetUrl;
+          video.play();
+        } else {
+          alert("Aapka browser HLS streaming support nahi karta.");
+        }
+      } else {
+        // Regular Embed / YouTube
+        let finalUrl = targetUrl;
+        if (finalUrl.includes("watch?v=")) {
+          finalUrl = finalUrl.replace("watch?v=", "embed/");
+        }
+        iframe.style.display = "block";
+        iframe.src = finalUrl;
+      }
+
       switchScreen("streamView");
     }
   </script>
