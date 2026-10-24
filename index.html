@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="referrer" content="no-referrer">
   <title>NetSportX TV - Live Sports</title>
   
   <style>
@@ -20,7 +21,6 @@
       overflow-x: hidden;
     }
 
-    /* Ad Banner Slots */
     .ad-container {
       width: 100%;
       max-width: 728px;
@@ -42,7 +42,6 @@
       justify-content: center;
     }
 
-    /* Branding Header */
     .brand-title {
       font-size: 2.2rem;
       font-weight: 900;
@@ -59,7 +58,6 @@
     .brand-title .brand-accent { color: #00ff73; text-shadow: 0 0 14px rgba(0, 255, 115, 0.4); }
     .brand-title .brand-tv { background: #00e664; color: #06130b; padding: 2px 8px; border-radius: 6px; font-size: 1.1rem; vertical-align: middle; }
 
-    /* Live Badge */
     .live-indicator {
       display: inline-flex;
       align-items: center;
@@ -96,7 +94,6 @@
       text-align: center;
     }
 
-    /* Buttons */
     .action-btn {
       width: 100%;
       max-width: 320px;
@@ -135,7 +132,6 @@
     }
     .back-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
 
-    /* Dropdown */
     .lang-dropdown {
       width: 100%;
       max-width: 320px;
@@ -151,7 +147,6 @@
     }
     .lang-dropdown option { background: #081a10; color: #fff; }
 
-    /* View Sections */
     .view-section {
       width: 100%;
       display: none;
@@ -160,7 +155,6 @@
     }
     .view-section.active { display: flex; }
 
-    /* Dual Player Container */
     .player-wrapper {
       width: 100%;
       max-width: 720px;
@@ -183,7 +177,19 @@
       object-fit: contain;
     }
 
-    /* Sticky Footer */
+    #streamStatusMessage {
+      position: absolute;
+      color: #00ff73;
+      font-size: 0.9rem;
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 6px 12px;
+      border-radius: 8px;
+      display: none;
+      pointer-events: none;
+      z-index: 10;
+    }
+
     .sticky-bottom-banner {
       width: 100%;
       position: sticky;
@@ -197,11 +203,11 @@
     }
   </style>
 
-  <!-- Firebase SDKs -->
+  <!-- Firebase Compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-  <!-- HLS.js Library -->
+  <!-- Hls.js latest stable engine -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
 </head>
 <body>
@@ -256,6 +262,8 @@
       </div>
 
       <div class="player-wrapper">
+        <div id="streamStatusMessage">Optimizing Stream...</div>
+
         <!-- iFrame player (YouTube/Embeds) -->
         <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen" allowfullscreen style="display:none;"></iframe>
         
@@ -278,7 +286,6 @@
   </footer>
 
   <script>
-    // Firebase Configuration
     const firebaseConfig = {
       apiKey: "AIzaSyBBjtnl1lVbPf6QwpnB85hZ6ID2woz8RP4",
       authDomain: "netsportxtv.firebaseapp.com",
@@ -301,7 +308,6 @@
 
     let hlsInstance = null;
 
-    // Realtime Listener
     db.ref("liveStream").on("value", (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -314,7 +320,15 @@
       }
     });
 
-    // View Navigation
+    function showStatus(text, duration = 3000) {
+      const el = document.getElementById("streamStatusMessage");
+      el.innerText = text;
+      el.style.display = "block";
+      if (duration > 0) {
+        setTimeout(() => { el.style.display = "none"; }, duration);
+      }
+    }
+
     function switchScreen(screenId) {
       document.querySelectorAll(".view-section").forEach(sec => sec.classList.remove("active"));
       document.getElementById(screenId).classList.add("active");
@@ -323,12 +337,14 @@
     function stopAllMedia() {
       const iframe = document.getElementById("videoIframe");
       const video = document.getElementById("liveVideoPlayer");
+      const statusEl = document.getElementById("streamStatusMessage");
 
       if (hlsInstance) {
         hlsInstance.destroy();
         hlsInstance = null;
       }
 
+      statusEl.style.display = "none";
       iframe.src = "";
       iframe.style.display = "none";
       video.pause();
@@ -347,22 +363,40 @@
       switchScreen("languageView");
     }
 
-    // List of streaming proxies for HLS & TS chunks
-    const PROXY_LIST = [
-      (url) => "https://proxy.cors.sh/" + url,
-      (url) => "https://corsproxy.io/?" + encodeURIComponent(url),
-      (url) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url)
+    // High performance stream proxies capable of routing Akamai/Sony tokens
+    const PROXY_PIPELINES = [
+      (u) => u, // 1: Direct link (Works on Safari & unblocked networks)
+      (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+      (u) => "https://proxy.cors.sh/" + u,
+      (u) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u)
     ];
 
-    function playStreamWithHls(videoElement, rawUrl) {
+    function playStreamEngine(videoElement, rawTargetUrl) {
       if (hlsInstance) {
         hlsInstance.destroy();
         hlsInstance = null;
       }
 
-      let activeProxyIndex = -1; // -1 = Direct Play
+      let currentPipelineIndex = 0;
 
-      function initHlsWithUrl(urlToLoad) {
+      function attemptLoad(pipelineIndex) {
+        if (pipelineIndex >= PROXY_PIPELINES.length) {
+          // Agar sabhi pipeline fail ho jayein to direct Web Embed Iframe player par route karein
+          console.error("All CORS bypass pipelines exhausted. Switching to embed player...");
+          showStatus("Routing through alternative player...");
+          
+          videoElement.style.display = "none";
+          const iframe = document.getElementById("videoIframe");
+          iframe.style.display = "block";
+          
+          // Akamai direct web wrapper
+          iframe.src = "https://playm3u8.com/index.html?url=" + encodeURIComponent(rawTargetUrl);
+          return;
+        }
+
+        const formattedUrl = PROXY_PIPELINES[pipelineIndex](rawTargetUrl);
+        showStatus(pipelineIndex === 0 ? "Loading Live Stream..." : "Bypassing Security (" + pipelineIndex + ")...");
+
         if (hlsInstance) {
           hlsInstance.destroy();
         }
@@ -370,77 +404,48 @@
         hlsInstance = new Hls({
           enableWorker: true,
           lowLatencyMode: true,
-          backBufferLength: 60,
+          backBufferLength: 30,
           xhrSetup: function (xhr, url) {
             xhr.withCredentials = false;
-
-            // SonyLIV / Akamai origin headers inject karein agar slivcdn ya cdn hai
-            if (rawUrl.includes("slivcdn.com") || rawUrl.includes("sony")) {
-              try {
-                xhr.setRequestHeader("Origin", "https://www.sonyliv.com");
-              } catch(e) {}
-            }
-
-            // Agar proxy use ho rahi hai to custom referer add karein
-            if (activeProxyIndex === 0) {
+            // API key for proxy.cors.sh
+            if (url.includes("cors.sh")) {
               xhr.setRequestHeader("x-cors-api-key", "temp_08c7a67f70b777a83457a41444983088");
             }
           }
         });
 
-        // Sub-manifests aur .ts chunks ko bhi proxy ke through route karein
-        if (activeProxyIndex >= 0) {
-          const currentProxy = PROXY_LIST[activeProxyIndex];
-          hlsInstance.on(Hls.Events.LEVEL_LOADED, function (event, data) {
-            if (data.details && data.details.fragments) {
-              data.details.fragments.forEach(frag => {
-                if (frag.url && !frag.url.startsWith("http")) {
-                  // Relative path resolution
-                  const baseUrl = urlToLoad.substring(0, urlToLoad.lastIndexOf('/') + 1);
-                  frag.url = currentProxy(baseUrl + frag.url);
-                }
-              });
-            }
-          });
-        }
-
-        hlsInstance.loadSource(urlToLoad);
+        hlsInstance.loadSource(formattedUrl);
         hlsInstance.attachMedia(videoElement);
 
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
-          videoElement.play().catch(e => console.log("Autoplay interact required:", e));
+          document.getElementById("streamStatusMessage").style.display = "none";
+          videoElement.play().catch(e => {
+            console.log("Autoplay paused. Click play button.", e);
+          });
         });
 
+        // Smart Failover on Network 403 or CORS Block
         hlsInstance.on(Hls.Events.ERROR, function (event, data) {
           if (data.fatal) {
-            console.warn("Stream Error, attempting next proxy step:", data.type, data.details);
-
-            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-              activeProxyIndex++;
-              if (activeProxyIndex < PROXY_LIST.length) {
-                console.log("Switching to Proxy Index:", activeProxyIndex);
-                const nextUrl = PROXY_LIST[activeProxyIndex](rawUrl);
-                initHlsWithUrl(nextUrl);
-              } else {
-                hlsInstance.destroy();
-                console.error("All proxies and direct connection failed.");
-              }
-            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-              hlsInstance.recoverMediaError();
-            } else {
-              hlsInstance.destroy();
-            }
+            console.warn("Pipeline " + pipelineIndex + " blocked or failed (" + data.type + "). Switching pipeline...");
+            hlsInstance.destroy();
+            hlsInstance = null;
+            attemptLoad(pipelineIndex + 1);
           }
         });
       }
 
-      // First try: Direct link
+      // Start pipeline
       if (Hls.isSupported()) {
-        initHlsWithUrl(rawUrl);
+        attemptLoad(0);
       } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-        // Safari iOS native
-        videoElement.src = rawUrl;
+        // iOS Safari native player (Akamai origin issues nahi deta)
+        videoElement.src = rawTargetUrl;
         videoElement.play().catch(e => console.log(e));
+      } else {
+        const iframe = document.getElementById("videoIframe");
+        iframe.style.display = "block";
+        iframe.src = "https://playm3u8.com/index.html?url=" + encodeURIComponent(rawTargetUrl);
       }
     }
 
@@ -458,13 +463,12 @@
       const iframe = document.getElementById("videoIframe");
       const video = document.getElementById("liveVideoPlayer");
 
-      // Auto-detect: Direct m3u8 stream vs Web Embed Iframe
       if (targetUrl.includes(".m3u8") || targetUrl.includes(".mpd")) {
         video.style.display = "block";
-        playStreamWithHls(video, targetUrl);
+        playStreamEngine(video, targetUrl.trim());
       } else {
-        // Regular Web / YouTube Embeds
-        let finalUrl = targetUrl;
+        // Embed links (Crichd, YouTube, etc.)
+        let finalUrl = targetUrl.trim();
         if (finalUrl.includes("watch?v=")) {
           finalUrl = finalUrl.replace("watch?v=", "embed/");
         }
