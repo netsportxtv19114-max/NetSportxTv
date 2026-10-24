@@ -208,7 +208,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   
-  <!-- HLS Engine for .m3u8 -->
+  <!-- HLS.js Engine -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
   
   <!-- Shaka Player for DASH .mpd -->
@@ -266,7 +266,6 @@
 
       <div class="player-wrapper">
         <div id="streamAlertBox"></div>
-        <!-- Fully modern allow permissions -->
         <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" style="display:none;"></iframe>
         <video id="liveVideoPlayer" controls autoplay playsinline style="display:none;"></video>
       </div>
@@ -371,7 +370,15 @@
       switchScreen("languageView");
     }
 
-    // Helper: Agar URL Lovable / Base64 format me hai to decode karein
+    // Proxy Rotator for bypassing 403 blocks
+    const PROXY_OPTIONS = [
+      (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+      (u) => "https://corsproxy.io/?" + encodeURIComponent(u),
+      (u) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u),
+      (u) => u
+    ];
+
+    // Helper: Decode Base64 if stream link is encoded
     function resolveTargetUrl(rawUrl) {
       try {
         if (rawUrl.includes("lovable.app/") && !rawUrl.includes("http", 15)) {
@@ -383,7 +390,7 @@
       return rawUrl;
     }
 
-    // 1. DASH ENGINE (.mpd format)
+    // 1. DASH Stream (.mpd)
     async function playDashEngine(videoElement, streamUrl) {
       if (!shaka.Player.isBrowserSupported()) {
         showNotice("Browser does not support DASH streaming.");
@@ -395,8 +402,8 @@
 
       shakaInstance.getNetworkingEngine().registerRequestFilter((type, request) => {
         let uri = request.uris[0];
-        if (!uri.includes("corsproxy.io")) {
-          request.uris[0] = "https://corsproxy.io/?" + encodeURIComponent(uri);
+        if (!uri.includes("allorigins") && !uri.includes("corsproxy")) {
+          request.uris[0] = PROXY_OPTIONS[0](uri);
         }
       });
 
@@ -405,50 +412,96 @@
         videoElement.play().catch(e => console.log(e));
       } catch (err) {
         console.error("DASH error:", err);
-        showNotice("Stream Blocked: Token Expired ya DRM Encrypted link hai.");
+        showNotice("Stream Blocked: Token expire ya DRM issue hai.");
       }
     }
 
-    // 2. HLS ENGINE (.m3u8 format)
-    function playHlsEngine(videoElement, streamUrl) {
-      const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(streamUrl);
+    // 2. Resilient HLS Stream Engine with Dynamic Failover
+    function playHlsEngine(videoElement, rawUrl) {
+      let currentProxyIndex = 0;
+      let networkRetryCount = 0;
 
-      if (Hls.isSupported()) {
-        hlsInstance = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          xhrSetup: function (xhr) {
-            xhr.withCredentials = false;
-          }
-        });
+      function loadWithCurrentProxy() {
+        if (hlsInstance) {
+          hlsInstance.destroy();
+          hlsInstance = null;
+        }
 
-        hlsInstance.on(Hls.Events.LEVEL_LOADED, function (event, data) {
-          if (data.details && data.details.fragments) {
-            data.details.fragments.forEach(frag => {
-              if (frag.url && !frag.url.includes("corsproxy.io")) {
-                frag.url = "https://corsproxy.io/?" + encodeURIComponent(frag.url);
+        const activeProxyUrl = PROXY_OPTIONS[currentProxyIndex](rawUrl);
+
+        if (Hls.isSupported()) {
+          hlsInstance = new Hls({
+            enableWorker: true,
+            lowLatencyMode: true,
+            manifestLoadingTimeOut: 10000,
+            xhrSetup: function (xhr) {
+              xhr.withCredentials = false;
+            }
+          });
+
+          // Ensure segments also follow proxy
+          hlsInstance.on(Hls.Events.LEVEL_LOADED, function (event, data) {
+            if (data.details && data.details.fragments) {
+              data.details.fragments.forEach(frag => {
+                if (frag.url && !frag.url.startsWith("http")) {
+                  const base = activeProxyUrl.substring(0, activeProxyUrl.lastIndexOf('/') + 1);
+                  frag.url = base + frag.url;
+                }
+              });
+            }
+          });
+
+          hlsInstance.loadSource(activeProxyUrl);
+          hlsInstance.attachMedia(videoElement);
+
+          hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
+            networkRetryCount = 0;
+            videoElement.play().catch(e => console.log("User play required:", e));
+          });
+
+          // Handled Error Recovery
+          hlsInstance.on(Hls.Events.ERROR, function (e, data) {
+            if (data.fatal) {
+              switch (data.type) {
+                case Hls.ErrorTypes.NETWORK_ERROR:
+                  if (networkRetryCount < 2) {
+                    networkRetryCount++;
+                    console.warn("Network error encountered, retrying...", data);
+                    hlsInstance.startLoad();
+                  } else {
+                    // Try next proxy option
+                    currentProxyIndex++;
+                    if (currentProxyIndex < PROXY_OPTIONS.length) {
+                      console.warn("Proxy failed, switching to backup proxy #" + currentProxyIndex);
+                      networkRetryCount = 0;
+                      loadWithCurrentProxy();
+                    } else {
+                      hlsInstance.destroy();
+                      showNotice("Stream Blocked: Token expire ho chuka hai ya Origin server ne block kar diya hai.");
+                    }
+                  }
+                  break;
+
+                case Hls.ErrorTypes.MEDIA_ERROR:
+                  console.warn("Media error encountered, attempting recovery...", data);
+                  hlsInstance.recoverMediaError();
+                  break;
+
+                default:
+                  hlsInstance.destroy();
+                  showNotice("Stream play nahi ho saki. Please doosri link try karein.");
+                  break;
               }
-            });
-          }
-        });
+            }
+          });
 
-        hlsInstance.loadSource(proxyUrl);
-        hlsInstance.attachMedia(videoElement);
-
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
+        } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
+          videoElement.src = activeProxyUrl;
           videoElement.play().catch(e => console.log(e));
-        });
-
-        hlsInstance.on(Hls.Events.ERROR, function (e, data) {
-          if (data.fatal) {
-            console.warn("HLS Fatal:", data);
-            showNotice("Stream Blocked: HLS Token expire ho chuka hai.");
-          }
-        });
-      } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-        videoElement.src = proxyUrl;
-        videoElement.play().catch(e => console.log(e));
+        }
       }
+
+      loadWithCurrentProxy();
     }
 
     async function startStreaming() {
@@ -465,20 +518,19 @@
       const iframe = document.getElementById("videoIframe");
       const video = document.getElementById("liveVideoPlayer");
       
-      // Auto-decode target if Base64 proxy wrapped
       const cleanUrl = resolveTargetUrl(originalInput.trim());
 
-      // Case 1: DASH Stream (.mpd)
+      // 1. DASH Stream
       if (cleanUrl.includes(".mpd")) {
         video.style.display = "block";
         await playDashEngine(video, cleanUrl);
       } 
-      // Case 2: HLS Stream (.m3u8)
-      else if (cleanUrl.includes(".m3u8") || cleanUrl.includes(".txt")) {
+      // 2. HLS Manifest Stream (.m3u8, .txt playlists)
+      else if (cleanUrl.includes(".m3u8") || cleanUrl.includes(".txt") || cleanUrl.includes("/hls/")) {
         video.style.display = "block";
         playHlsEngine(video, cleanUrl);
       } 
-      // Case 3: iFrame Web Embed
+      // 3. Regular Iframe / Web Embeds
       else {
         let finalUrl = cleanUrl;
         if (finalUrl.includes("watch?v=")) {
