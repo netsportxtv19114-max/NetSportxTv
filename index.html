@@ -266,7 +266,7 @@
 
       <div class="player-wrapper">
         <div id="streamAlertBox"></div>
-        <!-- Modern Permissions Policy without legacy allowfullscreen -->
+        <!-- Fully modern allow permissions -->
         <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" style="display:none;"></iframe>
         <video id="liveVideoPlayer" controls autoplay playsinline style="display:none;"></video>
       </div>
@@ -371,6 +371,18 @@
       switchScreen("languageView");
     }
 
+    // Helper: Agar URL Lovable / Base64 format me hai to decode karein
+    function resolveTargetUrl(rawUrl) {
+      try {
+        if (rawUrl.includes("lovable.app/") && !rawUrl.includes("http", 15)) {
+          const parts = rawUrl.split("lovable.app/")[1].split("?")[0];
+          const decoded = atob(parts);
+          if (decoded.startsWith("http")) return decoded;
+        }
+      } catch (e) {}
+      return rawUrl;
+    }
+
     // 1. DASH ENGINE (.mpd format)
     async function playDashEngine(videoElement, streamUrl) {
       if (!shaka.Player.isBrowserSupported()) {
@@ -441,9 +453,9 @@
 
     async function startStreaming() {
       const selected = document.getElementById("selectedLanguage").value;
-      const targetUrl = (selected === "Hindi") ? streamLinks.hindi : streamLinks.english;
+      const originalInput = (selected === "Hindi") ? streamLinks.hindi : streamLinks.english;
 
-      if (!targetUrl) {
+      if (!originalInput) {
         alert("Selected stream link abhi available nahi hai. Kripya doosri language chunein.");
         return;
       }
@@ -452,19 +464,21 @@
 
       const iframe = document.getElementById("videoIframe");
       const video = document.getElementById("liveVideoPlayer");
-      const cleanUrl = targetUrl.trim();
+      
+      // Auto-decode target if Base64 proxy wrapped
+      const cleanUrl = resolveTargetUrl(originalInput.trim());
 
-      // CASE A: DASH Stream (.mpd)
+      // Case 1: DASH Stream (.mpd)
       if (cleanUrl.includes(".mpd")) {
         video.style.display = "block";
         await playDashEngine(video, cleanUrl);
       } 
-      // CASE B: HLS Stream (.m3u8)
-      else if (cleanUrl.includes(".m3u8")) {
+      // Case 2: HLS Stream (.m3u8)
+      else if (cleanUrl.includes(".m3u8") || cleanUrl.includes(".txt")) {
         video.style.display = "block";
         playHlsEngine(video, cleanUrl);
       } 
-      // CASE C: iFrame Web Embed
+      // Case 3: iFrame Web Embed
       else {
         let finalUrl = cleanUrl;
         if (finalUrl.includes("watch?v=")) {
