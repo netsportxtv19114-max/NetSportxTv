@@ -202,10 +202,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
   <!-- HLS.js Library -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-
-  <!-- Google Shaka Player -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
 </head>
 <body>
 
@@ -262,7 +259,7 @@
         <!-- iFrame player (YouTube/Embeds) -->
         <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen" allowfullscreen style="display:none;"></iframe>
         
-        <!-- Video Element for HLS / Shaka -->
+        <!-- Live Video Element -->
         <video id="liveVideoPlayer" controls autoplay playsinline style="display:none;"></video>
       </div>
 
@@ -303,11 +300,6 @@
     };
 
     let hlsInstance = null;
-    let shakaInstance = null;
-
-    if (window.shaka) {
-      shaka.polyfill.installAll();
-    }
 
     // Realtime Listener
     db.ref("liveStream").on("value", (snapshot) => {
@@ -328,22 +320,13 @@
       document.getElementById(screenId).classList.add("active");
     }
 
-    async function stopAllMedia() {
+    function stopAllMedia() {
       const iframe = document.getElementById("videoIframe");
       const video = document.getElementById("liveVideoPlayer");
 
       if (hlsInstance) {
         hlsInstance.destroy();
         hlsInstance = null;
-      }
-
-      if (shakaInstance) {
-        try {
-          await shakaInstance.destroy();
-        } catch (e) {
-          console.error("Shaka destroy:", e);
-        }
-        shakaInstance = null;
       }
 
       iframe.src = "";
@@ -364,15 +347,22 @@
       switchScreen("languageView");
     }
 
-    // CORS Bypass Proxies
-    function getProxiedUrl(target) {
-      return "https://corsproxy.io/?" + encodeURIComponent(target);
-    }
+    // List of streaming proxies for HLS & TS chunks
+    const PROXY_LIST = [
+      (url) => "https://proxy.cors.sh/" + url,
+      (url) => "https://corsproxy.io/?" + encodeURIComponent(url),
+      (url) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(url)
+    ];
 
-    async function playHlsStream(videoElement, rawUrl) {
-      let isProxySwitched = false;
+    function playStreamWithHls(videoElement, rawUrl) {
+      if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
+      }
 
-      const loadStream = (urlToLoad) => {
+      let activeProxyIndex = -1; // -1 = Direct Play
+
+      function initHlsWithUrl(urlToLoad) {
         if (hlsInstance) {
           hlsInstance.destroy();
         }
@@ -380,60 +370,81 @@
         hlsInstance = new Hls({
           enableWorker: true,
           lowLatencyMode: true,
-          xhrSetup: function (xhr) {
+          backBufferLength: 60,
+          xhrSetup: function (xhr, url) {
             xhr.withCredentials = false;
+
+            // SonyLIV / Akamai origin headers inject karein agar slivcdn ya cdn hai
+            if (rawUrl.includes("slivcdn.com") || rawUrl.includes("sony")) {
+              try {
+                xhr.setRequestHeader("Origin", "https://www.sonyliv.com");
+              } catch(e) {}
+            }
+
+            // Agar proxy use ho rahi hai to custom referer add karein
+            if (activeProxyIndex === 0) {
+              xhr.setRequestHeader("x-cors-api-key", "temp_08c7a67f70b777a83457a41444983088");
+            }
           }
         });
+
+        // Sub-manifests aur .ts chunks ko bhi proxy ke through route karein
+        if (activeProxyIndex >= 0) {
+          const currentProxy = PROXY_LIST[activeProxyIndex];
+          hlsInstance.on(Hls.Events.LEVEL_LOADED, function (event, data) {
+            if (data.details && data.details.fragments) {
+              data.details.fragments.forEach(frag => {
+                if (frag.url && !frag.url.startsWith("http")) {
+                  // Relative path resolution
+                  const baseUrl = urlToLoad.substring(0, urlToLoad.lastIndexOf('/') + 1);
+                  frag.url = currentProxy(baseUrl + frag.url);
+                }
+              });
+            }
+          });
+        }
 
         hlsInstance.loadSource(urlToLoad);
         hlsInstance.attachMedia(videoElement);
 
         hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
-          videoElement.play().catch(e => console.log("Autoplay block:", e));
+          videoElement.play().catch(e => console.log("Autoplay interact required:", e));
         });
 
-        // Agar original URL CORS ya network se block ho toh proxy fallback
         hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-          if (data.fatal && !isProxySwitched) {
-            console.warn("Direct stream failed due to CORS. Switching to proxy...");
-            isProxySwitched = true;
-            loadStream(getProxiedUrl(rawUrl));
-          } else if (data.fatal && isProxySwitched) {
-            // Agar HLS fail ho to Shaka try karein
-            fallbackToShaka(videoElement, getProxiedUrl(rawUrl));
+          if (data.fatal) {
+            console.warn("Stream Error, attempting next proxy step:", data.type, data.details);
+
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+              activeProxyIndex++;
+              if (activeProxyIndex < PROXY_LIST.length) {
+                console.log("Switching to Proxy Index:", activeProxyIndex);
+                const nextUrl = PROXY_LIST[activeProxyIndex](rawUrl);
+                initHlsWithUrl(nextUrl);
+              } else {
+                hlsInstance.destroy();
+                console.error("All proxies and direct connection failed.");
+              }
+            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              hlsInstance.recoverMediaError();
+            } else {
+              hlsInstance.destroy();
+            }
           }
         });
-      };
+      }
 
+      // First try: Direct link
       if (Hls.isSupported()) {
-        loadStream(rawUrl);
+        initHlsWithUrl(rawUrl);
       } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-        // iOS Safari native
+        // Safari iOS native
         videoElement.src = rawUrl;
         videoElement.play().catch(e => console.log(e));
-      } else {
-        fallbackToShaka(videoElement, getProxiedUrl(rawUrl));
       }
     }
 
-    async function fallbackToShaka(videoElement, urlToLoad) {
-      if (!shaka.Player.isBrowserSupported()) return;
-      
-      if (hlsInstance) {
-        hlsInstance.destroy();
-        hlsInstance = null;
-      }
-
-      shakaInstance = new shaka.Player(videoElement);
-      try {
-        await shakaInstance.load(urlToLoad);
-        videoElement.play().catch(e => console.log(e));
-      } catch (e) {
-        console.error("Shaka error:", e);
-      }
-    }
-
-    async function startStreaming() {
+    function startStreaming() {
       const selected = document.getElementById("selectedLanguage").value;
       const targetUrl = (selected === "Hindi") ? streamLinks.hindi : streamLinks.english;
 
@@ -442,17 +453,17 @@
         return;
       }
 
-      await stopAllMedia();
+      stopAllMedia();
 
       const iframe = document.getElementById("videoIframe");
       const video = document.getElementById("liveVideoPlayer");
 
-      // Check stream type
+      // Auto-detect: Direct m3u8 stream vs Web Embed Iframe
       if (targetUrl.includes(".m3u8") || targetUrl.includes(".mpd")) {
         video.style.display = "block";
-        await playHlsStream(video, targetUrl);
+        playStreamWithHls(video, targetUrl);
       } else {
-        // Embed / Web Player
+        // Regular Web / YouTube Embeds
         let finalUrl = targetUrl;
         if (finalUrl.includes("watch?v=")) {
           finalUrl = finalUrl.replace("watch?v=", "embed/");
