@@ -177,6 +177,20 @@
       object-fit: contain;
     }
 
+    #streamAlertBox {
+      position: absolute;
+      background: rgba(0, 0, 0, 0.85);
+      border: 1px solid #ff4444;
+      color: #ffb3b3;
+      padding: 12px 18px;
+      border-radius: 10px;
+      text-align: center;
+      font-size: 0.9rem;
+      max-width: 90%;
+      display: none;
+      z-index: 10;
+    }
+
     .sticky-bottom-banner {
       width: 100%;
       position: sticky;
@@ -194,7 +208,10 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   
-  <!-- Shaka Player (Handles DASH .mpd + HLS .m3u8 + DRM) -->
+  <!-- HLS Engine for .m3u8 -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+  
+  <!-- Shaka Player for DASH .mpd & Widevine DRM -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js"></script>
 </head>
 <body>
@@ -248,6 +265,7 @@
       </div>
 
       <div class="player-wrapper">
+        <div id="streamAlertBox"></div>
         <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen" allowfullscreen style="display:none;"></iframe>
         <video id="liveVideoPlayer" controls autoplay playsinline style="display:none;"></video>
       </div>
@@ -285,6 +303,7 @@
       english: ""
     };
 
+    let hlsInstance = null;
     let shakaInstance = null;
 
     if (window.shaka) {
@@ -303,6 +322,12 @@
       }
     });
 
+    function showNotice(msg) {
+      const box = document.getElementById("streamAlertBox");
+      box.innerText = msg;
+      box.style.display = "block";
+    }
+
     function switchScreen(screenId) {
       document.querySelectorAll(".view-section").forEach(sec => sec.classList.remove("active"));
       document.getElementById(screenId).classList.add("active");
@@ -311,6 +336,14 @@
     async function stopAllMedia() {
       const iframe = document.getElementById("videoIframe");
       const video = document.getElementById("liveVideoPlayer");
+      const box = document.getElementById("streamAlertBox");
+
+      box.style.display = "none";
+
+      if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
+      }
 
       if (shakaInstance) {
         try {
@@ -337,47 +370,73 @@
       switchScreen("languageView");
     }
 
-    // DASH (.mpd) aur HLS (.m3u8) engine with Proxy Router
-    async function playUniversalStream(videoElement, streamUrl) {
+    // 1. DASH ENGINE (.mpd format like JioTV)
+    async function playDashEngine(videoElement, streamUrl) {
       if (!shaka.Player.isBrowserSupported()) {
-        alert("Browser streaming player ko support nahi karta.");
+        showNotice("Browser does not support DASH streaming.");
         return;
       }
 
       shakaInstance = new shaka.Player();
       await shakaInstance.attach(videoElement);
 
-      // Shaka Networking engine me transparent CORS proxy hook
+      // JioTV / Akamai Proxy Router for DASH chunks
       shakaInstance.getNetworkingEngine().registerRequestFilter((type, request) => {
         let uri = request.uris[0];
-        
-        // Agar JioTV ya Akamai request hai to CORS Proxy ke through route karein
-        if (uri.includes("jio.com") || uri.includes("slivcdn.com")) {
-          if (!uri.includes("corsproxy.io")) {
-            request.uris[0] = "https://corsproxy.io/?" + encodeURIComponent(uri);
-          }
-        }
-      });
-
-      shakaInstance.configure({
-        streaming: {
-          bufferingGoal: 10,
-          rebufferingGoal: 2,
-          retryParameters: {
-            maxAttempts: 3,
-            baseDelay: 1000
-          }
+        if (!uri.includes("corsproxy.io")) {
+          request.uris[0] = "https://corsproxy.io/?" + encodeURIComponent(uri);
         }
       });
 
       try {
         await shakaInstance.load(streamUrl);
-        videoElement.play().catch(e => console.log("Play interact required", e));
+        videoElement.play().catch(e => console.log(e));
       } catch (err) {
-        console.warn("Direct stream load error:", err);
-        
-        // Agar JioTV link DRM protected hai ya token blocked hai:
-        alert("Yeh live stream DRM-Protected (JioTV WDV) ya Token Expired hai. Kripya iFrame Embed link ya Non-DRM m3u8 link use karein.");
+        console.error("DASH error:", err);
+        showNotice("Stream Blocked: Token Expired ya DRM Encrypted link hai.");
+      }
+    }
+
+    // 2. HLS ENGINE (.m3u8 format like SonyLIV / Star)
+    function playHlsEngine(videoElement, streamUrl) {
+      const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(streamUrl);
+
+      if (Hls.isSupported()) {
+        hlsInstance = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          xhrSetup: function (xhr) {
+            xhr.withCredentials = false;
+          }
+        });
+
+        // Automatically proxy all internal .ts segments
+        hlsInstance.on(Hls.Events.LEVEL_LOADED, function (event, data) {
+          if (data.details && data.details.fragments) {
+            data.details.fragments.forEach(frag => {
+              if (frag.url && !frag.url.includes("corsproxy.io")) {
+                frag.url = "https://corsproxy.io/?" + encodeURIComponent(frag.url);
+              }
+            });
+          }
+        });
+
+        hlsInstance.loadSource(proxyUrl);
+        hlsInstance.attachMedia(videoElement);
+
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
+          videoElement.play().catch(e => console.log(e));
+        });
+
+        hlsInstance.on(Hls.Events.ERROR, function (e, data) {
+          if (data.fatal) {
+            console.warn("HLS Fatal:", data);
+            showNotice("Stream Blocked: HLS Token expire ho chuka hai.");
+          }
+        });
+      } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
+        videoElement.src = proxyUrl;
+        videoElement.play().catch(e => console.log(e));
       }
     }
 
@@ -396,12 +455,18 @@
       const video = document.getElementById("liveVideoPlayer");
       const cleanUrl = targetUrl.trim();
 
-      // Check stream type (.m3u8 ya .mpd DASH)
-      if (cleanUrl.includes(".m3u8") || cleanUrl.includes(".mpd")) {
+      // CASE A: DASH Stream (.mpd)
+      if (cleanUrl.includes(".mpd")) {
         video.style.display = "block";
-        await playUniversalStream(video, cleanUrl);
-      } else {
-        // Embed links (Crichd / Web iFrame)
+        await playDashEngine(video, cleanUrl);
+      } 
+      // CASE B: HLS Stream (.m3u8)
+      else if (cleanUrl.includes(".m3u8")) {
+        video.style.display = "block";
+        playHlsEngine(video, cleanUrl);
+      } 
+      // CASE C: iFrame Web Embed (Crichd, YouTube, etc.)
+      else {
         let finalUrl = cleanUrl;
         if (finalUrl.includes("watch?v=")) {
           finalUrl = finalUrl.replace("watch?v=", "embed/");
