@@ -208,10 +208,10 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   
-  <!-- HLS.js Engine -->
+  <!-- HLS Engine -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
   
-  <!-- Shaka Player for DASH .mpd -->
+  <!-- Shaka Player for DASH -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js"></script>
 </head>
 <body>
@@ -370,15 +370,7 @@
       switchScreen("languageView");
     }
 
-    // Proxy Rotator for bypassing 403 blocks
-    const PROXY_OPTIONS = [
-      (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-      (u) => "https://corsproxy.io/?" + encodeURIComponent(u),
-      (u) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u),
-      (u) => u
-    ];
-
-    // Helper: Decode Base64 if stream link is encoded
+    // Resolves base64 or wrapped parameters
     function resolveTargetUrl(rawUrl) {
       try {
         if (rawUrl.includes("lovable.app/") && !rawUrl.includes("http", 15)) {
@@ -390,10 +382,17 @@
       return rawUrl;
     }
 
-    // 1. DASH Stream (.mpd)
+    // Proxy Rotator Pool
+    const PROXY_PIPELINE = [
+      (u) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+      (u) => u
+    ];
+
+    // DASH Engine (.mpd)
     async function playDashEngine(videoElement, streamUrl) {
       if (!shaka.Player.isBrowserSupported()) {
-        showNotice("Browser does not support DASH streaming.");
+        showNotice("Browser DASH playback support nahi karta.");
         return;
       }
 
@@ -402,106 +401,106 @@
 
       shakaInstance.getNetworkingEngine().registerRequestFilter((type, request) => {
         let uri = request.uris[0];
-        if (!uri.includes("allorigins") && !uri.includes("corsproxy")) {
-          request.uris[0] = PROXY_OPTIONS[0](uri);
+        if (!uri.includes("corsproxy") && !uri.includes("codetabs")) {
+          request.uris[0] = PROXY_PIPELINE[0](uri);
         }
       });
 
       try {
         await shakaInstance.load(streamUrl);
-        videoElement.play().catch(e => console.log(e));
+        videoElement.play().catch(() => {});
       } catch (err) {
         console.error("DASH error:", err);
         showNotice("Stream Blocked: Token expire ya DRM issue hai.");
       }
     }
 
-    // 2. Resilient HLS Stream Engine with Dynamic Failover
+    // HLS Engine with Exponential Retry & Proxy Failover
     function playHlsEngine(videoElement, rawUrl) {
-      let currentProxyIndex = 0;
-      let networkRetryCount = 0;
+      let proxyIndex = 0;
+      let retryCount = 0;
+      const MAX_RETRIES = 3;
 
-      function loadWithCurrentProxy() {
+      function startHls(targetUrl) {
         if (hlsInstance) {
           hlsInstance.destroy();
           hlsInstance = null;
         }
 
-        const activeProxyUrl = PROXY_OPTIONS[currentProxyIndex](rawUrl);
-
         if (Hls.isSupported()) {
           hlsInstance = new Hls({
             enableWorker: true,
             lowLatencyMode: true,
-            manifestLoadingTimeOut: 10000,
+            manifestLoadingTimeOut: 8000,
             xhrSetup: function (xhr) {
               xhr.withCredentials = false;
             }
           });
 
-          // Ensure segments also follow proxy
+          // Sub-fragments rewrite
           hlsInstance.on(Hls.Events.LEVEL_LOADED, function (event, data) {
             if (data.details && data.details.fragments) {
               data.details.fragments.forEach(frag => {
                 if (frag.url && !frag.url.startsWith("http")) {
-                  const base = activeProxyUrl.substring(0, activeProxyUrl.lastIndexOf('/') + 1);
+                  const base = targetUrl.substring(0, targetUrl.lastIndexOf('/') + 1);
                   frag.url = base + frag.url;
                 }
               });
             }
           });
 
-          hlsInstance.loadSource(activeProxyUrl);
+          hlsInstance.loadSource(targetUrl);
           hlsInstance.attachMedia(videoElement);
 
           hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
-            networkRetryCount = 0;
-            videoElement.play().catch(e => console.log("User play required:", e));
+            retryCount = 0;
+            videoElement.play().catch(() => {});
           });
 
-          // Handled Error Recovery
           hlsInstance.on(Hls.Events.ERROR, function (e, data) {
             if (data.fatal) {
               switch (data.type) {
                 case Hls.ErrorTypes.NETWORK_ERROR:
-                  if (networkRetryCount < 2) {
-                    networkRetryCount++;
-                    console.warn("Network error encountered, retrying...", data);
-                    hlsInstance.startLoad();
+                  if (retryCount < MAX_RETRIES) {
+                    retryCount++;
+                    console.warn(`Network error, retry attempt ${retryCount}...`);
+                    setTimeout(() => {
+                      if (hlsInstance) hlsInstance.startLoad();
+                    }, 2000);
                   } else {
-                    // Try next proxy option
-                    currentProxyIndex++;
-                    if (currentProxyIndex < PROXY_OPTIONS.length) {
-                      console.warn("Proxy failed, switching to backup proxy #" + currentProxyIndex);
-                      networkRetryCount = 0;
-                      loadWithCurrentProxy();
+                    // Switch to fallback proxy
+                    proxyIndex++;
+                    if (proxyIndex < PROXY_PIPELINE.length) {
+                      console.warn(`Proxy #${proxyIndex - 1} failed. Switching to proxy #${proxyIndex}`);
+                      retryCount = 0;
+                      startHls(PROXY_PIPELINE[proxyIndex](rawUrl));
                     } else {
                       hlsInstance.destroy();
-                      showNotice("Stream Blocked: Token expire ho chuka hai ya Origin server ne block kar diya hai.");
+                      showNotice("Stream unavailable: Token expired ya server ne block kar diya hai.");
                     }
                   }
                   break;
 
                 case Hls.ErrorTypes.MEDIA_ERROR:
-                  console.warn("Media error encountered, attempting recovery...", data);
+                  console.warn("Media error, recovering...");
                   hlsInstance.recoverMediaError();
                   break;
 
                 default:
                   hlsInstance.destroy();
-                  showNotice("Stream play nahi ho saki. Please doosri link try karein.");
+                  showNotice("Stream playback error.");
                   break;
               }
             }
           });
 
         } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-          videoElement.src = activeProxyUrl;
-          videoElement.play().catch(e => console.log(e));
+          videoElement.src = targetUrl;
+          videoElement.play().catch(() => {});
         }
       }
 
-      loadWithCurrentProxy();
+      startHls(PROXY_PIPELINE[0](rawUrl));
     }
 
     async function startStreaming() {
@@ -517,10 +516,9 @@
 
       const iframe = document.getElementById("videoIframe");
       const video = document.getElementById("liveVideoPlayer");
-      
       const cleanUrl = resolveTargetUrl(originalInput.trim());
 
-      // 1. DASH Stream
+      // 1. DASH Stream (.mpd)
       if (cleanUrl.includes(".mpd")) {
         video.style.display = "block";
         await playDashEngine(video, cleanUrl);
