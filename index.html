@@ -211,7 +211,7 @@
   <!-- HLS Engine for .m3u8 -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
   
-  <!-- Shaka Player for DASH .mpd & Widevine DRM -->
+  <!-- Shaka Player for DASH .mpd -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js"></script>
 </head>
 <body>
@@ -266,7 +266,8 @@
 
       <div class="player-wrapper">
         <div id="streamAlertBox"></div>
-        <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen" allowfullscreen style="display:none;"></iframe>
+        <!-- Modern Permissions Policy without legacy allowfullscreen -->
+        <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" style="display:none;"></iframe>
         <video id="liveVideoPlayer" controls autoplay playsinline style="display:none;"></video>
       </div>
 
@@ -370,7 +371,7 @@
       switchScreen("languageView");
     }
 
-    // 1. DASH ENGINE (.mpd format like JioTV)
+    // 1. DASH ENGINE (.mpd format)
     async function playDashEngine(videoElement, streamUrl) {
       if (!shaka.Player.isBrowserSupported()) {
         showNotice("Browser does not support DASH streaming.");
@@ -380,7 +381,6 @@
       shakaInstance = new shaka.Player();
       await shakaInstance.attach(videoElement);
 
-      // JioTV / Akamai Proxy Router for DASH chunks
       shakaInstance.getNetworkingEngine().registerRequestFilter((type, request) => {
         let uri = request.uris[0];
         if (!uri.includes("corsproxy.io")) {
@@ -397,7 +397,7 @@
       }
     }
 
-    // 2. HLS ENGINE (.m3u8 format like SonyLIV / Star)
+    // 2. HLS ENGINE (.m3u8 format)
     function playHlsEngine(videoElement, streamUrl) {
       const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(streamUrl);
 
@@ -410,7 +410,6 @@
           }
         });
 
-        // Automatically proxy all internal .ts segments
         hlsInstance.on(Hls.Events.LEVEL_LOADED, function (event, data) {
           if (data.details && data.details.fragments) {
             data.details.fragments.forEach(frag => {
@@ -465,7 +464,7 @@
         video.style.display = "block";
         playHlsEngine(video, cleanUrl);
       } 
-      // CASE C: iFrame Web Embed (Crichd, YouTube, etc.)
+      // CASE C: iFrame Web Embed
       else {
         let finalUrl = cleanUrl;
         if (finalUrl.includes("watch?v=")) {
