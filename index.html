@@ -263,7 +263,6 @@
 
       <div class="player-wrapper">
         <div id="streamAlertBox"></div>
-        <!-- Pure Permissions Policy -->
         <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" style="display:none;"></iframe>
         <video id="liveVideoPlayer" controls autoplay playsinline style="display:none;"></video>
       </div>
@@ -281,13 +280,6 @@
   </footer>
 
   <script>
-    // Suppress third-party iframe warnings from ads
-    const originalWarn = console.warn;
-    console.warn = function (...args) {
-      if (args[0] && typeof args[0] === 'string' && args[0].includes('allowfullscreen')) return;
-      originalWarn.apply(console, args);
-    };
-
     const firebaseConfig = {
       apiKey: "AIzaSyBBjtnl1lVbPf6QwpnB85hZ6ID2woz8RP4",
       authDomain: "netsportxtv.firebaseapp.com",
@@ -363,7 +355,8 @@
       switchScreen("languageView");
     }
 
-    function playHlsStream(videoElement, rawUrl) {
+    // Play direct HLS with immediate fallback if unauthorized (401/403)
+    function playHlsStream(videoElement, iframeElement, rawUrl) {
       if (hlsInstance) {
         hlsInstance.destroy();
         hlsInstance = null;
@@ -375,7 +368,7 @@
         hlsInstance = new Hls({
           enableWorker: true,
           lowLatencyMode: true,
-          manifestLoadingTimeOut: 6000
+          manifestLoadingTimeOut: 4000
         });
 
         hlsInstance.loadSource(proxyUrl);
@@ -385,11 +378,18 @@
           videoElement.play().catch(() => {});
         });
 
+        // 401/Network error aane par bina console flood kiye clean fallback
         hlsInstance.on(Hls.Events.ERROR, function (e, data) {
           if (data.fatal) {
             hlsInstance.destroy();
             hlsInstance = null;
-            showNotice("Yeh stream link block ya expire ho chuki hai. Kripya iFrame Embed link use karein.");
+
+            // Direct iframe stream fallback try karein
+            videoElement.style.display = "none";
+            iframeElement.style.display = "block";
+            iframeElement.src = rawUrl;
+            
+            showNotice("Stream token expired hai. Kripya naya embed link Firebase me update karein.");
           }
         });
       } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
@@ -400,9 +400,9 @@
 
     function startStreaming() {
       const selected = document.getElementById("selectedLanguage").value;
-      const originalInput = (selected === "Hindi") ? streamLinks.hindi : streamLinks.english;
+      const targetUrl = (selected === "Hindi") ? streamLinks.hindi : streamLinks.english;
 
-      if (!originalInput) {
+      if (!targetUrl) {
         alert("Selected stream link abhi available nahi hai. Kripya doosri language chunein.");
         return;
       }
@@ -411,14 +411,14 @@
 
       const iframe = document.getElementById("videoIframe");
       const video = document.getElementById("liveVideoPlayer");
-      const cleanUrl = originalInput.trim();
+      const cleanUrl = targetUrl.trim();
 
-      // Agar direct m3u8 playlist hai
-      if (cleanUrl.endsWith(".m3u8") || cleanUrl.includes(".m3u8?")) {
+      // Case 1: Direct .m3u8 link
+      if (cleanUrl.includes(".m3u8")) {
         video.style.display = "block";
-        playHlsStream(video, cleanUrl);
+        playHlsStream(video, iframe, cleanUrl);
       } 
-      // Baaki sabhi Web Embeds / iFrame links ke liye
+      // Case 2: Embed / Web Player links (YouTube, Crichd, etc.)
       else {
         let finalUrl = cleanUrl;
         if (finalUrl.includes("watch?v=")) {
