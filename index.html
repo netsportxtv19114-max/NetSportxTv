@@ -201,7 +201,10 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-  <!-- Google Shaka Player (HLS + DASH Support) -->
+  <!-- HLS.js Library -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+  <!-- Google Shaka Player -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.js"></script>
 </head>
 <body>
@@ -259,8 +262,8 @@
         <!-- iFrame player (YouTube/Embeds) -->
         <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen" allowfullscreen style="display:none;"></iframe>
         
-        <!-- Shaka Video Element -->
-        <video id="shakaPlayer" controls autoplay playsinline style="display:none;"></video>
+        <!-- Video Element for HLS / Shaka -->
+        <video id="liveVideoPlayer" controls autoplay playsinline style="display:none;"></video>
       </div>
 
       <!-- MID-PAGE AD BANNER -->
@@ -299,10 +302,12 @@
       english: ""
     };
 
+    let hlsInstance = null;
     let shakaInstance = null;
 
-    // Shaka Polyfills install karein
-    shaka.polyfill.installAll();
+    if (window.shaka) {
+      shaka.polyfill.installAll();
+    }
 
     // Realtime Listener
     db.ref("liveStream").on("value", (snapshot) => {
@@ -325,13 +330,18 @@
 
     async function stopAllMedia() {
       const iframe = document.getElementById("videoIframe");
-      const video = document.getElementById("shakaPlayer");
+      const video = document.getElementById("liveVideoPlayer");
+
+      if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
+      }
 
       if (shakaInstance) {
         try {
           await shakaInstance.destroy();
         } catch (e) {
-          console.error("Shaka destroy error:", e);
+          console.error("Shaka destroy:", e);
         }
         shakaInstance = null;
       }
@@ -354,47 +364,72 @@
       switchScreen("languageView");
     }
 
-    async function initShakaPlayer(videoElement, streamUrl) {
-      if (!shaka.Player.isBrowserSupported()) {
-        alert("Aapka browser Shaka Player support nahi karta.");
-        return;
+    // CORS Bypass Proxies
+    function getProxiedUrl(target) {
+      return "https://corsproxy.io/?" + encodeURIComponent(target);
+    }
+
+    async function playHlsStream(videoElement, rawUrl) {
+      let isProxySwitched = false;
+
+      const loadStream = (urlToLoad) => {
+        if (hlsInstance) {
+          hlsInstance.destroy();
+        }
+
+        hlsInstance = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          xhrSetup: function (xhr) {
+            xhr.withCredentials = false;
+          }
+        });
+
+        hlsInstance.loadSource(urlToLoad);
+        hlsInstance.attachMedia(videoElement);
+
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
+          videoElement.play().catch(e => console.log("Autoplay block:", e));
+        });
+
+        // Agar original URL CORS ya network se block ho toh proxy fallback
+        hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+          if (data.fatal && !isProxySwitched) {
+            console.warn("Direct stream failed due to CORS. Switching to proxy...");
+            isProxySwitched = true;
+            loadStream(getProxiedUrl(rawUrl));
+          } else if (data.fatal && isProxySwitched) {
+            // Agar HLS fail ho to Shaka try karein
+            fallbackToShaka(videoElement, getProxiedUrl(rawUrl));
+          }
+        });
+      };
+
+      if (Hls.isSupported()) {
+        loadStream(rawUrl);
+      } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
+        // iOS Safari native
+        videoElement.src = rawUrl;
+        videoElement.play().catch(e => console.log(e));
+      } else {
+        fallbackToShaka(videoElement, getProxiedUrl(rawUrl));
+      }
+    }
+
+    async function fallbackToShaka(videoElement, urlToLoad) {
+      if (!shaka.Player.isBrowserSupported()) return;
+      
+      if (hlsInstance) {
+        hlsInstance.destroy();
+        hlsInstance = null;
       }
 
       shakaInstance = new shaka.Player(videoElement);
-
-      // Low latency & streaming config
-      shakaInstance.configure({
-        streaming: {
-          bufferingGoal: 10,
-          rebufferingGoal: 2,
-          retryParameters: {
-            maxAttempts: 3,
-            baseDelay: 1000,
-            backoffFactor: 2
-          }
-        }
-      });
-
-      // Stream play karne ka attempt
       try {
-        await shakaInstance.load(streamUrl);
-        videoElement.play().catch(e => console.log("Autoplay interact require:", e));
-      } catch (error) {
-        console.warn("Direct stream failed, CORS proxy se load kar rahe hain...", error);
-
-        // Agar CORS block hua, toh automatically bypass proxy try karein
-        if (error.code === 1001 || error.code === 1002 || error.severity === 2) {
-          try {
-            const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(streamUrl);
-            await shakaInstance.load(proxyUrl);
-            videoElement.play().catch(e => console.log("Proxy play error:", e));
-          } catch (proxyError) {
-            console.error("Proxy stream bhi load nahi ho payi:", proxyError);
-            alert("Stream load nahi ho saki. Server ne access restrict kar rakha hai.");
-          }
-        } else {
-          alert("Stream play error: " + error.message);
-        }
+        await shakaInstance.load(urlToLoad);
+        videoElement.play().catch(e => console.log(e));
+      } catch (e) {
+        console.error("Shaka error:", e);
       }
     }
 
@@ -410,14 +445,14 @@
       await stopAllMedia();
 
       const iframe = document.getElementById("videoIframe");
-      const video = document.getElementById("shakaPlayer");
+      const video = document.getElementById("liveVideoPlayer");
 
-      // Check stream type: m3u8 / mpd / embed
+      // Check stream type
       if (targetUrl.includes(".m3u8") || targetUrl.includes(".mpd")) {
         video.style.display = "block";
-        await initShakaPlayer(video, targetUrl);
+        await playHlsStream(video, targetUrl);
       } else {
-        // Regular Embed / YouTube
+        // Embed / Web Player
         let finalUrl = targetUrl;
         if (finalUrl.includes("watch?v=")) {
           finalUrl = finalUrl.replace("watch?v=", "embed/");
