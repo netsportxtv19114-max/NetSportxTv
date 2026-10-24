@@ -177,19 +177,6 @@
       object-fit: contain;
     }
 
-    #streamStatusMessage {
-      position: absolute;
-      color: #00ff73;
-      font-size: 0.9rem;
-      font-weight: 600;
-      background: rgba(0, 0, 0, 0.7);
-      padding: 6px 12px;
-      border-radius: 8px;
-      display: none;
-      pointer-events: none;
-      z-index: 10;
-    }
-
     .sticky-bottom-banner {
       width: 100%;
       position: sticky;
@@ -206,8 +193,8 @@
   <!-- Firebase Compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
-  <!-- Hls.js latest stable engine -->
+  
+  <!-- HLS.js latest stable engine -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
 </head>
 <body>
@@ -262,8 +249,6 @@
       </div>
 
       <div class="player-wrapper">
-        <div id="streamStatusMessage">Optimizing Stream...</div>
-
         <!-- iFrame player (YouTube/Embeds) -->
         <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen" allowfullscreen style="display:none;"></iframe>
         
@@ -320,15 +305,6 @@
       }
     });
 
-    function showStatus(text, duration = 3000) {
-      const el = document.getElementById("streamStatusMessage");
-      el.innerText = text;
-      el.style.display = "block";
-      if (duration > 0) {
-        setTimeout(() => { el.style.display = "none"; }, duration);
-      }
-    }
-
     function switchScreen(screenId) {
       document.querySelectorAll(".view-section").forEach(sec => sec.classList.remove("active"));
       document.getElementById(screenId).classList.add("active");
@@ -337,14 +313,12 @@
     function stopAllMedia() {
       const iframe = document.getElementById("videoIframe");
       const video = document.getElementById("liveVideoPlayer");
-      const statusEl = document.getElementById("streamStatusMessage");
 
       if (hlsInstance) {
         hlsInstance.destroy();
         hlsInstance = null;
       }
 
-      statusEl.style.display = "none";
       iframe.src = "";
       iframe.style.display = "none";
       video.pause();
@@ -363,89 +337,67 @@
       switchScreen("languageView");
     }
 
-    // High performance stream proxies capable of routing Akamai/Sony tokens
-    const PROXY_PIPELINES = [
-      (u) => u, // 1: Direct link (Works on Safari & unblocked networks)
-      (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-      (u) => "https://proxy.cors.sh/" + u,
-      (u) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u)
-    ];
+    // Proxy Formatter: Raw URL ko proxy me wrap karta hai
+    function toProxyUrl(rawUrl) {
+      if (!rawUrl) return "";
+      // Agar already proxy wrapped hai to dobara wrap na karein
+      if (rawUrl.includes("corsproxy.io") || rawUrl.includes("codetabs")) return rawUrl;
+      return "https://corsproxy.io/?" + encodeURIComponent(rawUrl);
+    }
 
-    function playStreamEngine(videoElement, rawTargetUrl) {
+    function playStreamWithProxy(videoElement, rawUrl) {
       if (hlsInstance) {
         hlsInstance.destroy();
         hlsInstance = null;
       }
 
-      let currentPipelineIndex = 0;
+      const proxiedMasterUrl = toProxyUrl(rawUrl);
 
-      function attemptLoad(pipelineIndex) {
-        if (pipelineIndex >= PROXY_PIPELINES.length) {
-          // Agar sabhi pipeline fail ho jayein to direct Web Embed Iframe player par route karein
-          console.error("All CORS bypass pipelines exhausted. Switching to embed player...");
-          showStatus("Routing through alternative player...");
-          
-          videoElement.style.display = "none";
-          const iframe = document.getElementById("videoIframe");
-          iframe.style.display = "block";
-          
-          // Akamai direct web wrapper
-          iframe.src = "https://playm3u8.com/index.html?url=" + encodeURIComponent(rawTargetUrl);
-          return;
-        }
-
-        const formattedUrl = PROXY_PIPELINES[pipelineIndex](rawTargetUrl);
-        showStatus(pipelineIndex === 0 ? "Loading Live Stream..." : "Bypassing Security (" + pipelineIndex + ")...");
-
-        if (hlsInstance) {
-          hlsInstance.destroy();
-        }
-
+      if (Hls.isSupported()) {
         hlsInstance = new Hls({
           enableWorker: true,
           lowLatencyMode: true,
           backBufferLength: 30,
           xhrSetup: function (xhr, url) {
             xhr.withCredentials = false;
-            // API key for proxy.cors.sh
-            if (url.includes("cors.sh")) {
-              xhr.setRequestHeader("x-cors-api-key", "temp_08c7a67f70b777a83457a41444983088");
+          }
+        });
+
+        // Sub-playlists aur .ts video chunks ko automatically proxy se load karein
+        hlsInstance.on(Hls.Events.LEVEL_LOADED, function (event, data) {
+          if (data.details && data.details.fragments) {
+            data.details.fragments.forEach(frag => {
+              if (frag.url && !frag.url.includes("corsproxy.io")) {
+                frag.url = toProxyUrl(frag.url);
+              }
+            });
+          }
+        });
+
+        hlsInstance.loadSource(proxiedMasterUrl);
+        hlsInstance.attachMedia(videoElement);
+
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
+          videoElement.play().catch(e => {
+            console.log("Autoplay paused. User play required:", e);
+          });
+        });
+
+        hlsInstance.on(Hls.Events.ERROR, function (event, data) {
+          if (data.fatal) {
+            console.warn("HLS Error:", data.type, data.details);
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+              hlsInstance.recoverMediaError();
+            } else {
+              hlsInstance.destroy();
             }
           }
         });
 
-        hlsInstance.loadSource(formattedUrl);
-        hlsInstance.attachMedia(videoElement);
-
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
-          document.getElementById("streamStatusMessage").style.display = "none";
-          videoElement.play().catch(e => {
-            console.log("Autoplay paused. Click play button.", e);
-          });
-        });
-
-        // Smart Failover on Network 403 or CORS Block
-        hlsInstance.on(Hls.Events.ERROR, function (event, data) {
-          if (data.fatal) {
-            console.warn("Pipeline " + pipelineIndex + " blocked or failed (" + data.type + "). Switching pipeline...");
-            hlsInstance.destroy();
-            hlsInstance = null;
-            attemptLoad(pipelineIndex + 1);
-          }
-        });
-      }
-
-      // Start pipeline
-      if (Hls.isSupported()) {
-        attemptLoad(0);
       } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-        // iOS Safari native player (Akamai origin issues nahi deta)
-        videoElement.src = rawTargetUrl;
+        // Native Safari fallback
+        videoElement.src = proxiedMasterUrl;
         videoElement.play().catch(e => console.log(e));
-      } else {
-        const iframe = document.getElementById("videoIframe");
-        iframe.style.display = "block";
-        iframe.src = "https://playm3u8.com/index.html?url=" + encodeURIComponent(rawTargetUrl);
       }
     }
 
@@ -462,13 +414,14 @@
 
       const iframe = document.getElementById("videoIframe");
       const video = document.getElementById("liveVideoPlayer");
+      const cleanUrl = targetUrl.trim();
 
-      if (targetUrl.includes(".m3u8") || targetUrl.includes(".mpd")) {
+      if (cleanUrl.includes(".m3u8") || cleanUrl.includes(".mpd")) {
         video.style.display = "block";
-        playStreamEngine(video, targetUrl.trim());
+        playStreamWithProxy(video, cleanUrl);
       } else {
-        // Embed links (Crichd, YouTube, etc.)
-        let finalUrl = targetUrl.trim();
+        // Regular Web / YouTube Embeds
+        let finalUrl = cleanUrl;
         if (finalUrl.includes("watch?v=")) {
           finalUrl = finalUrl.replace("watch?v=", "embed/");
         }
