@@ -7,7 +7,13 @@
   <title>NetSportX TV - Live Sports</title>
   
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+      -webkit-tap-highlight-color: transparent; 
+    }
     
     body {
       background: radial-gradient(circle at 50% 20%, #102a1d 0%, #06130b 100%);
@@ -21,6 +27,7 @@
       overflow-x: hidden;
     }
 
+    /* Ad Banner Slots */
     .ad-container {
       width: 100%;
       max-width: 728px;
@@ -42,6 +49,7 @@
       justify-content: center;
     }
 
+    /* Branding Header */
     .brand-title {
       font-size: 2.2rem;
       font-weight: 900;
@@ -58,6 +66,7 @@
     .brand-title .brand-accent { color: #00ff73; text-shadow: 0 0 14px rgba(0, 255, 115, 0.4); }
     .brand-title .brand-tv { background: #00e664; color: #06130b; padding: 2px 8px; border-radius: 6px; font-size: 1.1rem; vertical-align: middle; }
 
+    /* Live Badge */
     .live-indicator {
       display: inline-flex;
       align-items: center;
@@ -94,6 +103,7 @@
       text-align: center;
     }
 
+    /* Action Buttons */
     .action-btn {
       width: 100%;
       max-width: 320px;
@@ -132,6 +142,7 @@
     }
     .back-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
 
+    /* Dropdown */
     .lang-dropdown {
       width: 100%;
       max-width: 320px;
@@ -147,6 +158,7 @@
     }
     .lang-dropdown option { background: #081a10; color: #fff; }
 
+    /* Views */
     .view-section {
       width: 100%;
       display: none;
@@ -155,6 +167,7 @@
     }
     .view-section.active { display: flex; }
 
+    /* Player Container */
     .player-wrapper {
       width: 100%;
       max-width: 720px;
@@ -169,7 +182,6 @@
       align-items: center;
       justify-content: center;
     }
-    .player-wrapper iframe,
     .player-wrapper video {
       width: 100%;
       height: 100%;
@@ -191,6 +203,7 @@
       z-index: 10;
     }
 
+    /* Sticky Footer */
     .sticky-bottom-banner {
       width: 100%;
       position: sticky;
@@ -204,20 +217,22 @@
     }
   </style>
 
-  <!-- Firebase Compat SDKs -->
+  <!-- Firebase Compat SDKs (Direct Browser Support) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  
-  <!-- HLS Engine -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.7/dist/hls.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-analytics-compat.js"></script>
+
+  <!-- Shaka Player CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.5/shaka-player.compiled.js"></script>
 </head>
 <body>
 
+  <!-- Top Banner Slot -->
   <div class="ad-container" id="topAdSlot"></div>
 
   <main class="main-wrapper">
 
-    <!-- SCREEN 1: HOME VIEW -->
+    <!-- Screen 1: Home View -->
     <section id="homeView" class="view-section active">
       <div class="brand-title">
         <span class="brand-net">NetSport</span><span class="brand-accent">X</span>
@@ -234,7 +249,7 @@
       <button class="action-btn" onclick="goToLanguageView()">WATCH LIVE MATCH</button>
     </section>
 
-    <!-- SCREEN 2: LANGUAGE SELECTOR -->
+    <!-- Screen 2: Language Selector -->
     <section id="languageView" class="view-section">
       <div class="brand-title">
         <span class="brand-net">NetSport</span><span class="brand-accent">X</span>
@@ -244,192 +259,3 @@
       <p style="color: #a3cfb4; margin-bottom: 12px; font-size: 0.95rem;">Select Commentary Language:</p>
 
       <select id="selectedLanguage" class="lang-dropdown">
-        <option value="Hindi">Hindi Commentary</option>
-        <option value="English">English Commentary</option>
-      </select>
-
-      <button class="action-btn" onclick="startStreaming()">CONTINUE TO STREAM</button>
-      <button class="back-btn" onclick="goToHomeView()">← Back to Home</button>
-    </section>
-
-    <!-- SCREEN 3: STREAM PLAYER -->
-    <section id="streamView" class="view-section">
-      <div style="display:flex; justify-content: space-between; width: 100%; max-width: 720px; align-items:center; margin-bottom: 10px;">
-        <div style="font-weight: 700; color: #00ff73; font-size: 1rem;" id="playerMatchTitle">Live Stream</div>
-        <div class="live-indicator" style="margin-bottom: 0;">
-          <span class="live-dot"></span> LIVE
-        </div>
-      </div>
-
-      <div class="player-wrapper">
-        <div id="streamAlertBox"></div>
-        <iframe id="videoIframe" src="" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" style="display:none;"></iframe>
-        <video id="liveVideoPlayer" controls autoplay playsinline style="display:none;"></video>
-      </div>
-
-      <div class="ad-container" style="min-height: 60px;"></div>
-
-      <button class="back-btn" style="max-width: 260px;" onclick="goToLanguageView()">← Change Language</button>
-      <button class="back-btn" style="max-width: 260px; margin-top: 6px;" onclick="goToHomeView()">⌂ Home</button>
-    </section>
-
-  </main>
-
-  <footer class="sticky-bottom-banner">
-    <div class="ad-container" id="bottomAdSlot" style="margin: 0; min-height: 60px;"></div>
-  </footer>
-
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyBBjtnl1lVbPf6QwpnB85hZ6ID2woz8RP4",
-      authDomain: "netsportxtv.firebaseapp.com",
-      databaseURL: "https://netsportxtv-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "netsportxtv",
-      storageBucket: "netsportxtv.firebasestorage.app",
-      messagingSenderId: "20505178770",
-      appId: "1:20505178770:web:a33108e152f4ce0499ec4b",
-      measurementId: "G-FH8RTB7WN9"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-
-    let streamLinks = {
-      title: "Live Match",
-      hindi: "",
-      english: ""
-    };
-
-    let hlsInstance = null;
-
-    db.ref("liveStream").on("value", (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        streamLinks.title = data.title || "Live Sports";
-        streamLinks.hindi = data.hindi || "";
-        streamLinks.english = data.english || "";
-
-        document.getElementById("homeMatchTitle").innerText = streamLinks.title;
-        document.getElementById("playerMatchTitle").innerText = streamLinks.title;
-      }
-    });
-
-    function showNotice(msg) {
-      const box = document.getElementById("streamAlertBox");
-      box.innerText = msg;
-      box.style.display = "block";
-    }
-
-    function switchScreen(screenId) {
-      document.querySelectorAll(".view-section").forEach(sec => sec.classList.remove("active"));
-      document.getElementById(screenId).classList.add("active");
-    }
-
-    function stopAllMedia() {
-      const iframe = document.getElementById("videoIframe");
-      const video = document.getElementById("liveVideoPlayer");
-      const box = document.getElementById("streamAlertBox");
-
-      box.style.display = "none";
-
-      if (hlsInstance) {
-        hlsInstance.destroy();
-        hlsInstance = null;
-      }
-
-      iframe.src = "";
-      iframe.style.display = "none";
-      video.pause();
-      video.removeAttribute("src");
-      video.load();
-      video.style.display = "none";
-    }
-
-    function goToHomeView() {
-      stopAllMedia();
-      switchScreen("homeView");
-    }
-
-    function goToLanguageView() {
-      stopAllMedia();
-      switchScreen("languageView");
-    }
-
-    // Play direct HLS with immediate fallback if unauthorized (401/403)
-    function playHlsStream(videoElement, iframeElement, rawUrl) {
-      if (hlsInstance) {
-        hlsInstance.destroy();
-        hlsInstance = null;
-      }
-
-      const proxyUrl = "https://corsproxy.io/?url=" + encodeURIComponent(rawUrl);
-
-      if (Hls.isSupported()) {
-        hlsInstance = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          manifestLoadingTimeOut: 4000
-        });
-
-        hlsInstance.loadSource(proxyUrl);
-        hlsInstance.attachMedia(videoElement);
-
-        hlsInstance.on(Hls.Events.MANIFEST_PARSED, function () {
-          videoElement.play().catch(() => {});
-        });
-
-        // 401/Network error aane par bina console flood kiye clean fallback
-        hlsInstance.on(Hls.Events.ERROR, function (e, data) {
-          if (data.fatal) {
-            hlsInstance.destroy();
-            hlsInstance = null;
-
-            // Direct iframe stream fallback try karein
-            videoElement.style.display = "none";
-            iframeElement.style.display = "block";
-            iframeElement.src = rawUrl;
-            
-            showNotice("Stream token expired hai. Kripya naya embed link Firebase me update karein.");
-          }
-        });
-      } else if (videoElement.canPlayType("application/vnd.apple.mpegurl")) {
-        videoElement.src = rawUrl;
-        videoElement.play().catch(() => {});
-      }
-    }
-
-    function startStreaming() {
-      const selected = document.getElementById("selectedLanguage").value;
-      const targetUrl = (selected === "Hindi") ? streamLinks.hindi : streamLinks.english;
-
-      if (!targetUrl) {
-        alert("Selected stream link abhi available nahi hai. Kripya doosri language chunein.");
-        return;
-      }
-
-      stopAllMedia();
-
-      const iframe = document.getElementById("videoIframe");
-      const video = document.getElementById("liveVideoPlayer");
-      const cleanUrl = targetUrl.trim();
-
-      // Case 1: Direct .m3u8 link
-      if (cleanUrl.includes(".m3u8")) {
-        video.style.display = "block";
-        playHlsStream(video, iframe, cleanUrl);
-      } 
-      // Case 2: Embed / Web Player links (YouTube, Crichd, etc.)
-      else {
-        let finalUrl = cleanUrl;
-        if (finalUrl.includes("watch?v=")) {
-          finalUrl = finalUrl.replace("watch?v=", "embed/");
-        }
-        iframe.style.display = "block";
-        iframe.src = finalUrl;
-      }
-
-      switchScreen("streamView");
-    }
-  </script>
-</body>
-</html>
