@@ -27,7 +27,6 @@
       overflow-x: hidden;
     }
 
-    /* Ad Banner Slots */
     .ad-container {
       width: 100%;
       max-width: 728px;
@@ -49,7 +48,6 @@
       justify-content: center;
     }
 
-    /* Branding Header */
     .brand-title {
       font-size: 2.2rem;
       font-weight: 900;
@@ -66,7 +64,6 @@
     .brand-title .brand-accent { color: #00ff73; text-shadow: 0 0 14px rgba(0, 255, 115, 0.4); }
     .brand-title .brand-tv { background: #00e664; color: #06130b; padding: 2px 8px; border-radius: 6px; font-size: 1.1rem; vertical-align: middle; }
 
-    /* Live Badge */
     .live-indicator {
       display: inline-flex;
       align-items: center;
@@ -103,7 +100,6 @@
       text-align: center;
     }
 
-    /* Action Buttons */
     .action-btn {
       width: 100%;
       max-width: 320px;
@@ -142,7 +138,6 @@
     }
     .back-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
 
-    /* Dropdown */
     .lang-dropdown {
       width: 100%;
       max-width: 320px;
@@ -158,7 +153,6 @@
     }
     .lang-dropdown option { background: #081a10; color: #fff; }
 
-    /* Views */
     .view-section {
       width: 100%;
       display: none;
@@ -167,7 +161,6 @@
     }
     .view-section.active { display: flex; }
 
-    /* Player Container */
     .player-wrapper {
       width: 100%;
       max-width: 720px;
@@ -203,7 +196,6 @@
       z-index: 10;
     }
 
-    /* Sticky Footer */
     .sticky-bottom-banner {
       width: 100%;
       position: sticky;
@@ -217,7 +209,7 @@
     }
   </style>
 
-  <!-- Firebase Compat SDKs (Direct Browser Support) -->
+  <!-- Firebase Compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-analytics-compat.js"></script>
@@ -227,7 +219,6 @@
 </head>
 <body>
 
-  <!-- Top Banner Slot -->
   <div class="ad-container" id="topAdSlot"></div>
 
   <main class="main-wrapper">
@@ -259,3 +250,175 @@
       <p style="color: #a3cfb4; margin-bottom: 12px; font-size: 0.95rem;">Select Commentary Language:</p>
 
       <select id="selectedLanguage" class="lang-dropdown">
+        <option value="Hindi">Hindi Commentary</option>
+        <option value="English">English Commentary</option>
+      </select>
+
+      <button class="action-btn" onclick="startStreaming()">CONTINUE TO STREAM</button>
+      <button class="back-btn" onclick="goToHomeView()">← Back to Home</button>
+    </section>
+
+    <!-- Screen 3: Stream Player View -->
+    <section id="streamView" class="view-section">
+      <div style="display:flex; justify-content: space-between; width: 100%; max-width: 720px; align-items:center; margin-bottom: 10px;">
+        <div style="font-weight: 700; color: #00ff73; font-size: 1rem;" id="playerMatchTitle">Live Stream</div>
+        <div class="live-indicator" style="margin-bottom: 0;">
+          <span class="live-dot"></span> LIVE
+        </div>
+      </div>
+
+      <div class="player-wrapper">
+        <div id="streamAlertBox"></div>
+        <video id="liveVideoPlayer" controls autoplay playsinline></video>
+      </div>
+
+      <div class="ad-container" style="min-height: 60px;"></div>
+
+      <button class="back-btn" style="max-width: 260px;" onclick="goToLanguageView()">← Change Language</button>
+      <button class="back-btn" style="max-width: 260px; margin-top: 6px;" onclick="goToHomeView()">⌂ Home</button>
+    </section>
+
+  </main>
+
+  <footer class="sticky-bottom-banner">
+    <div class="ad-container" id="bottomAdSlot" style="margin: 0; min-height: 60px;"></div>
+  </footer>
+
+  <script>
+    // Aapka live Render proxy URL
+    const PROXY_BASE_URL = "https://netsportx-proxy.onrender.com/proxy?url=";
+
+    // Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBBjtnl1lVbPf6QwpnB85hZ6ID2woz8RP4",
+      authDomain: "netsportxtv.firebaseapp.com",
+      databaseURL: "https://netsportxtv-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "netsportxtv",
+      storageBucket: "netsportxtv.firebasestorage.app",
+      messagingSenderId: "20505178770",
+      appId: "1:20505178770:web:a33108e152f4ce0499ec4b",
+      measurementId: "G-FH8RTB7WN9"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    if (firebase.analytics) {
+      firebase.analytics();
+    }
+
+    let streamLinks = {
+      title: "Live Match",
+      hindi: "",
+      english: ""
+    };
+
+    let shakaPlayerInstance = null;
+    shaka.polyfill.installAll();
+
+    // Firebase Data Listener
+    db.ref("liveStream").on("value", (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        streamLinks.title = data.title || "Live Sports";
+        streamLinks.hindi = data.hindi || "";
+        streamLinks.english = data.english || "";
+
+        document.getElementById("homeMatchTitle").innerText = streamLinks.title;
+        document.getElementById("playerMatchTitle").innerText = streamLinks.title;
+      }
+    });
+
+    function showNotice(msg) {
+      const box = document.getElementById("streamAlertBox");
+      box.innerText = msg;
+      box.style.display = "block";
+    }
+
+    function switchScreen(screenId) {
+      document.querySelectorAll(".view-section").forEach(sec => sec.classList.remove("active"));
+      document.getElementById(screenId).classList.add("active");
+    }
+
+    async function stopAllMedia() {
+      const video = document.getElementById("liveVideoPlayer");
+      const box = document.getElementById("streamAlertBox");
+
+      box.style.display = "none";
+
+      if (shakaPlayerInstance) {
+        try {
+          await shakaPlayerInstance.destroy();
+        } catch (e) {}
+        shakaPlayerInstance = null;
+      }
+
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    }
+
+    function goToHomeView() {
+      stopAllMedia();
+      switchScreen("homeView");
+    }
+
+    function goToLanguageView() {
+      stopAllMedia();
+      switchScreen("languageView");
+    }
+
+    // Shaka Player + Proxy Logic
+    async function initShakaWithProxy(videoElement, rawTargetUrl) {
+      if (!shaka.Player.isBrowserSupported()) {
+        showNotice("Aapka browser Shaka Player support nahi karta.");
+        return;
+      }
+
+      shakaPlayerInstance = new shaka.Player(videoElement);
+
+      // Har request (manifest + video chunks) ko Render Proxy ke through pipe karna
+      shakaPlayerInstance.getNetworkingEngine().registerRequestFilter((type, request) => {
+        const originalUri = request.uris[0];
+        if (!originalUri.startsWith(PROXY_BASE_URL)) {
+          request.uris[0] = PROXY_BASE_URL + encodeURIComponent(originalUri);
+        }
+      });
+
+      shakaPlayerInstance.configure({
+        streaming: {
+          bufferingGoal: 10,
+          rebufferingGoal: 2,
+          retryParameters: {
+            maxAttempts: 3,
+            baseDelay: 1000
+          }
+        }
+      });
+
+      try {
+        await shakaPlayerInstance.load(rawTargetUrl);
+        videoElement.play().catch(e => console.log("Play interact needed:", e));
+      } catch (err) {
+        console.error("Shaka error code:", err.code, err);
+        showNotice("Stream load karne me dikkat aayi. Check karein ki stream link valid aur live hai ya nahi.");
+      }
+    }
+
+    async function startStreaming() {
+      const selected = document.getElementById("selectedLanguage").value;
+      const targetUrl = (selected === "Hindi") ? streamLinks.hindi : streamLinks.english;
+
+      if (!targetUrl) {
+        alert("Selected stream link abhi available nahi hai.");
+        return;
+      }
+
+      await stopAllMedia();
+      switchScreen("streamView");
+
+      const video = document.getElementById("liveVideoPlayer");
+      await initShakaWithProxy(video, targetUrl.trim());
+    }
+  </script>
+</body>
+</html>
